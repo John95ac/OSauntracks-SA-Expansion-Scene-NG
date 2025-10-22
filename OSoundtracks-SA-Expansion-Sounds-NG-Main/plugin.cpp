@@ -1,4 +1,4 @@
-// ===== INCLUDES COMPLETOS PARA SKSE Y SISTEMA =====
+// ===== COMPLETE INCLUDES FOR SKSE AND SYSTEM =====
 #include <RE/Skyrim.h>
 #include <SKSE/SKSE.h>
 #include <shlobj.h>
@@ -19,7 +19,9 @@
 
 namespace fs = std::filesystem;
 
-// ===== FUNCIONES UTILITARIAS ULTRA-SEGURAS =====
+static constexpr const char* PLUGIN_VERSION = "1.8.7";
+
+// ===== ULTRA-SAFE UTILITY FUNCTIONS =====
 
 std::string SafeWideStringToString(const std::wstring& wstr) {
     if (wstr.empty()) return std::string();
@@ -78,7 +80,6 @@ struct ParsedRule {
     int applyCount = -1;
 };
 
-// ESTRUCTURA PARA MANEJAR SONIDO + PLAYBACK
 struct SoundWithPlayback {
     std::string soundFile;
     std::string playback;
@@ -87,38 +88,31 @@ struct SoundWithPlayback {
     SoundWithPlayback(const std::string& sound, const std::string& pb) : soundFile(sound), playback(pb) {}
 };
 
-// ENUM PARA RESULTADO DE SETPRESET (MODIFICADO)
 enum class SetPresetResult { Added, Replaced, NoChange };
 
-// ESTRUCTURA MODIFICADA PARA REEMPLAZAR SONIDOS EN LUGAR DE AGREGAR
 struct OrderedPluginData {
     std::vector<std::pair<std::string, std::vector<SoundWithPlayback>>> orderedData;
-    std::set<std::string> processedAnimationKeys;  // NUEVO: Track de keys procesadas desde INI
+    std::set<std::string> processedAnimationKeys;
 
-    // FUNCIÓN MODIFICADA: REEMPLAZA en lugar de agregar cuando ya existe
     SetPresetResult setPreset(const std::string& animationKey, const std::string& soundFile,
                               const std::string& playback = "0") {
-        processedAnimationKeys.insert(animationKey);  // Marcar como procesada
+        processedAnimationKeys.insert(animationKey);
 
         auto it = std::find_if(orderedData.begin(), orderedData.end(),
                                [&animationKey](const auto& pair) { return pair.first == animationKey; });
 
         if (it == orderedData.end()) {
-            // No existe, agregar nueva entrada
             orderedData.emplace_back(animationKey,
                                      std::vector<SoundWithPlayback>{SoundWithPlayback(soundFile, playback)});
             orderedData.back().second.reserve(20);
             return SetPresetResult::Added;
         } else {
-            // Ya existe, REEMPLAZAR el contenido completo
             auto& sounds = it->second;
 
-            // Verificar si es exactamente el mismo contenido
             if (sounds.size() == 1 && sounds[0].soundFile == soundFile && sounds[0].playback == playback) {
                 return SetPresetResult::NoChange;
             }
 
-            // REEMPLAZAR con el nuevo sonido
             sounds.clear();
             sounds.emplace_back(soundFile, playback);
             return SetPresetResult::Replaced;
@@ -163,7 +157,6 @@ struct OrderedPluginData {
         }
     }
 
-    // NUEVA FUNCIÓN: Limpiar AnimationKeys no procesadas
     void cleanUnprocessedKeys() {
         auto it = orderedData.begin();
         while (it != orderedData.end()) {
@@ -190,27 +183,279 @@ struct OrderedPluginData {
     }
 };
 
-// ===== NUEVA FUNCIÓN: VALIDACIÓN SIMPLE DE INTEGRIDAD JSON AL INICIO =====
+// ===== NEW PATH VALIDATION WITH DLL VERIFICATION =====
+
+bool IsValidPluginPath(const fs::path& pluginPath, std::ofstream& logFile) {
+    const std::vector<std::string> dllNames = {
+        "OSoundtracks-SA-Expansion-Sounds-NG.dll"
+    };
+    
+    for (const auto& dllName : dllNames) {
+        fs::path dllPath = pluginPath / dllName;
+        
+        try {
+            if (fs::exists(dllPath)) {
+                logFile << "DLL validation passed: Found " << dllName << std::endl;
+                return true;
+            }
+        } catch (...) {
+            continue;
+        }
+    }
+    
+    logFile << "DLL validation failed: No valid DLL found in path" << std::endl;
+    return false;
+}
+
+// ===== CASE-INSENSITIVE FILE SEARCH WITH WABBAJACK SUPPORT =====
+
+bool FindFileWithFallback(const fs::path& basePath, const std::string& filename, 
+                          fs::path& foundPath, std::ofstream& logFile) {
+    try {
+        fs::path normalPath = basePath / filename;
+        if (fs::exists(normalPath)) {
+            foundPath = normalPath;
+            return true;
+        }
+        
+        std::string basePathStr = basePath.string();
+        if (!basePathStr.empty() && basePathStr.back() != '\\') {
+            basePathStr += '\\';
+        }
+        basePathStr += '\\';
+        basePathStr += filename;
+        
+        fs::path doubleBackslashPath(basePathStr);
+        try {
+            doubleBackslashPath = fs::canonical(doubleBackslashPath);
+            if (fs::exists(doubleBackslashPath)) {
+                foundPath = doubleBackslashPath;
+                return true;
+            }
+        } catch (...) {}
+        
+        if (fs::exists(basePath) && fs::is_directory(basePath)) {
+            std::string lowerFilename = filename;
+            std::transform(lowerFilename.begin(), lowerFilename.end(), 
+                         lowerFilename.begin(), ::tolower);
+            
+            for (const auto& entry : fs::directory_iterator(basePath)) {
+                try {
+                    std::string entryFilename = entry.path().filename().string();
+                    std::string lowerEntryFilename = entryFilename;
+                    std::transform(lowerEntryFilename.begin(), lowerEntryFilename.end(), 
+                                 lowerEntryFilename.begin(), ::tolower);
+                    
+                    if (lowerEntryFilename == lowerFilename) {
+                        foundPath = entry.path();
+                        return true;
+                    }
+                } catch (...) {
+                    continue;
+                }
+            }
+        }
+        
+        return false;
+        
+    } catch (...) {
+        return false;
+    }
+}
+
+// ===== CASE-INSENSITIVE PATH BUILDING FOR WABBAJACK =====
+
+fs::path BuildPathCaseInsensitive(const fs::path& basePath, 
+                                  const std::vector<std::string>& components, 
+                                  std::ofstream& logFile) {
+    try {
+        fs::path currentPath = basePath;
+        
+        for (const auto& component : components) {
+            fs::path testPath = currentPath / component;
+            if (fs::exists(testPath)) {
+                currentPath = testPath;
+                continue;
+            }
+            
+            std::string lowerComponent = component;
+            std::transform(lowerComponent.begin(), lowerComponent.end(), 
+                         lowerComponent.begin(), ::tolower);
+            testPath = currentPath / lowerComponent;
+            if (fs::exists(testPath)) {
+                currentPath = testPath;
+                continue;
+            }
+            
+            std::string upperComponent = component;
+            std::transform(upperComponent.begin(), upperComponent.end(), 
+                         upperComponent.begin(), ::toupper);
+            testPath = currentPath / upperComponent;
+            if (fs::exists(testPath)) {
+                currentPath = testPath;
+                continue;
+            }
+            
+            bool found = false;
+            if (fs::exists(currentPath) && fs::is_directory(currentPath)) {
+                for (const auto& entry : fs::directory_iterator(currentPath)) {
+                    try {
+                        std::string entryName = entry.path().filename().string();
+                        std::string lowerEntryName = entryName;
+                        std::transform(lowerEntryName.begin(), lowerEntryName.end(), 
+                                     lowerEntryName.begin(), ::tolower);
+                        
+                        if (lowerEntryName == lowerComponent) {
+                            currentPath = entry.path();
+                            found = true;
+                            break;
+                        }
+                    } catch (...) {
+                        continue;
+                    }
+                }
+            }
+            
+            if (!found) {
+                currentPath = currentPath / component;
+            }
+        }
+        
+        return currentPath;
+        
+    } catch (...) {
+        return basePath;
+    }
+}
+
+// ===== ENHANCED GAME PATH DETECTION WITH EXTENDED REGISTRY =====
+
+std::string GetGamePathEnhanced(std::ofstream& logFile) {
+    try {
+        std::string mo2Path = GetEnvVar("MO2_MODS_PATH");
+        if (!mo2Path.empty()) {
+            logFile << "Detected MO2 from environment variable" << std::endl;
+            return mo2Path;
+        }
+
+        std::string vortexPath = GetEnvVar("VORTEX_MODS_PATH");
+        if (!vortexPath.empty()) {
+            logFile << "Detected Vortex from environment variable" << std::endl;
+            return vortexPath;
+        }
+
+        std::vector<std::pair<std::string, std::string>> registryKeys = {
+            {"SOFTWARE\\WOW6432Node\\Bethesda Softworks\\Skyrim Special Edition", "Installed Path"},
+            {"SOFTWARE\\WOW6432Node\\GOG.com\\Games\\1457087920", "path"},
+            {"SOFTWARE\\WOW6432Node\\Valve\\Steam\\Apps\\489830", "InstallLocation"},
+            {"SOFTWARE\\WOW6432Node\\Valve\\Steam\\Apps\\611670", "InstallLocation"}
+        };
+
+        HKEY hKey;
+        char pathBuffer[MAX_PATH] = {0};
+        DWORD pathSize = sizeof(pathBuffer);
+
+        for (const auto& [key, valueName] : registryKeys) {
+            if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, key.c_str(), 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+                if (RegQueryValueExA(hKey, valueName.c_str(), NULL, NULL, (LPBYTE)pathBuffer, &pathSize) ==
+                    ERROR_SUCCESS) {
+                    RegCloseKey(hKey);
+                    std::string result(pathBuffer);
+                    if (!result.empty()) {
+                        logFile << "Detected game path from registry: " << key << std::endl;
+                        return result;
+                    }
+                }
+                RegCloseKey(hKey);
+            }
+            pathSize = sizeof(pathBuffer);
+        }
+
+        std::vector<std::string> commonPaths = {
+            "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Skyrim Special Edition",
+            "C:\\Program Files\\Steam\\steamapps\\common\\Skyrim Special Edition",
+            "D:\\Steam\\steamapps\\common\\Skyrim Special Edition",
+            "E:\\Steam\\steamapps\\common\\Skyrim Special Edition",
+            "F:\\Steam\\steamapps\\common\\Skyrim Special Edition",
+            "G:\\Steam\\steamapps\\common\\Skyrim Special Edition",
+            "C:\\GOG Games\\Skyrim Special Edition",
+            "D:\\GOG Games\\Skyrim Special Edition"
+        };
+
+        for (const auto& pathCandidate : commonPaths) {
+            try {
+                if (fs::exists(pathCandidate) && fs::is_directory(pathCandidate)) {
+                    logFile << "Detected game path from common locations" << std::endl;
+                    return pathCandidate;
+                }
+            } catch (...) {
+                continue;
+            }
+        }
+
+        logFile << "No standard game path detected" << std::endl;
+        return "";
+        
+    } catch (...) {
+        logFile << "ERROR in GetGamePathEnhanced" << std::endl;
+        return "";
+    }
+}
+
+// ===== DLL DIRECTORY DETECTION FOR WABBAJACK FALLBACK =====
+
+fs::path GetDllDirectory(std::ofstream& logFile) {
+    try {
+        HMODULE hModule = nullptr;
+
+        static int dummyVariable = 0;
+
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               reinterpret_cast<LPCSTR>(&dummyVariable), &hModule) &&
+            hModule != nullptr) {
+            wchar_t dllPath[MAX_PATH] = {0};
+            DWORD size = GetModuleFileNameW(hModule, dllPath, MAX_PATH);
+
+            if (size > 0) {
+                std::wstring wsDllPath(dllPath);
+                std::string dllPathStr = SafeWideStringToString(wsDllPath);
+
+                if (!dllPathStr.empty()) {
+                    fs::path dllDir = fs::path(dllPathStr).parent_path();
+                    return dllDir;
+                }
+            }
+        }
+
+        return fs::path();
+
+    } catch (const std::exception& e) {
+        logFile << "ERROR in GetDllDirectory: " << e.what() << std::endl;
+        return fs::path();
+    } catch (...) {
+        logFile << "ERROR in GetDllDirectory: Unknown exception" << std::endl;
+        return fs::path();
+    }
+}
+
+// ===== SIMPLE JSON INTEGRITY CHECK AT STARTUP =====
 
 bool PerformSimpleJsonIntegrityCheck(const fs::path& jsonPath, std::ofstream& logFile) {
     try {
         logFile << "Performing SIMPLE JSON integrity check at startup..." << std::endl;
         logFile << "----------------------------------------------------" << std::endl;
 
-        // Verificar que el archivo existe
         if (!fs::exists(jsonPath)) {
             logFile << "ERROR: JSON file does not exist at: " << jsonPath.string() << std::endl;
             return false;
         }
 
-        // Verificar tamaño mínimo
         auto fileSize = fs::file_size(jsonPath);
         if (fileSize < 10) {
             logFile << "ERROR: JSON file is too small (" << fileSize << " bytes)" << std::endl;
             return false;
         }
 
-        // Leer el contenido completo SIN MODIFICAR
         std::ifstream jsonFile(jsonPath, std::ios::binary);
         if (!jsonFile.is_open()) {
             logFile << "ERROR: Cannot open JSON file for integrity check" << std::endl;
@@ -232,7 +477,6 @@ bool PerformSimpleJsonIntegrityCheck(const fs::path& jsonPath, std::ofstream& lo
 
         logFile << "JSON file size: " << fileSize << " bytes" << std::endl;
 
-        // VALIDACIÓN 1: Estructura básica de JSON
         content = content.substr(content.find_first_not_of(" \t\r\n"));
         content = content.substr(0, content.find_last_not_of(" \t\r\n") + 1);
 
@@ -241,10 +485,9 @@ bool PerformSimpleJsonIntegrityCheck(const fs::path& jsonPath, std::ofstream& lo
             return false;
         }
 
-        // VALIDACIÓN 2: Balance de llaves, corchetes y paréntesis
-        int braceCount = 0;    // {}
-        int bracketCount = 0;  // []
-        int parenCount = 0;    // ()
+        int braceCount = 0;
+        int bracketCount = 0;
+        int parenCount = 0;
         bool inString = false;
         bool escape = false;
         int line = 1;
@@ -314,7 +557,6 @@ bool PerformSimpleJsonIntegrityCheck(const fs::path& jsonPath, std::ofstream& lo
             }
         }
 
-        // Verificar balance final
         if (braceCount != 0) {
             logFile << "ERROR: Unbalanced braces (missing " << (braceCount > 0 ? "closing" : "opening")
                     << " braces: " << abs(braceCount) << ")" << std::endl;
@@ -333,7 +575,6 @@ bool PerformSimpleJsonIntegrityCheck(const fs::path& jsonPath, std::ofstream& lo
             return false;
         }
 
-        // VALIDACIÓN 3: Verificar que contiene la clave básica esperada de OSoundtracks
         int foundKeys = 0;
         if (content.find("\"SoundKey\"") != std::string::npos) {
             foundKeys++;
@@ -345,10 +586,8 @@ bool PerformSimpleJsonIntegrityCheck(const fs::path& jsonPath, std::ofstream& lo
             return false;
         }
 
-        // VALIDACIÓN 4: Verificar sintaxis básica de comas
         std::string cleanContent = content;
 
-        // Remover strings para evitar falsos positivos
         bool inStr = false;
         bool esc = false;
         for (size_t i = 0; i < cleanContent.length(); i++) {
@@ -375,7 +614,6 @@ bool PerformSimpleJsonIntegrityCheck(const fs::path& jsonPath, std::ofstream& lo
             }
         }
 
-        // Verificar patrones problemáticos
         if (cleanContent.find(",,") != std::string::npos) {
             logFile << "ERROR: Found double comma ',,' in JSON structure" << std::endl;
             return false;
@@ -405,7 +643,8 @@ bool PerformSimpleJsonIntegrityCheck(const fs::path& jsonPath, std::ofstream& lo
         return false;
     }
 }
-// ===== FUNCIONES DE RUTA ULTRA-SEGURAS =====
+
+// ===== ULTRA-SAFE PATH FUNCTIONS =====
 
 std::string GetDocumentsPath() {
     try {
@@ -493,11 +732,10 @@ void CreateDirectoryIfNotExists(const fs::path& path) {
             fs::create_directories(path);
         }
     } catch (...) {
-        // Silent fail
     }
 }
 
-// ===== FUNCIONES UTILITARIAS MEJORADAS =====
+// ===== IMPROVED UTILITY FUNCTIONS =====
 
 std::string Trim(const std::string& str) {
     if (str.empty()) return str;
@@ -566,14 +804,12 @@ std::string EscapeJson(const std::string& str) {
     return result;
 }
 
-// Normalizar el tiempo de playback - acepta cualquier valor numérico
 std::string NormalizePlayback(const std::string& playback) {
-    if (playback.empty()) return "0"; // Default: 0 segundos si está vacío
+    if (playback.empty()) return "0";
     
     std::string trimmed = Trim(playback);
     if (trimmed.empty()) return "0";
     
-    // Retornar el valor tal cual - sin validación de rango
     return trimmed;
 }
 
@@ -586,26 +822,24 @@ ParsedRule ParseRuleLine(const std::string& key, const std::string& value) {
         rule.animationKey = Trim(parts[0]);
         rule.soundFile = Trim(parts[1]);
 
-        // Parsear el tercer parámetro: tiempo en segundos
         if (parts.size() >= 3) {
             std::string timeStr = Trim(parts[2]);
-            rule.playback = NormalizePlayback(timeStr); // Ahora retorna "0" por defecto
+            rule.playback = NormalizePlayback(timeStr);
         } else {
-            rule.playback = "0"; // Default: 0 segundos si no existe el tercer parámetro
+            rule.playback = "0";
         }
 
         if (parts.size() >= 4) {
             rule.extra = Trim(parts[3]);
         }
 
-        // OSoundtracks: modo simplificado - siempre aplicar
         rule.applyCount = -1;
     }
 
     return rule;
 }
 
-// ===== SISTEMA DE BACKUP LITERAL PERFECTO =====
+// ===== PERFECT LITERAL BACKUP SYSTEM =====
 
 int ReadBackupConfigFromIni(const fs::path& iniPath, std::ofstream& logFile) {
     try {
@@ -655,7 +889,7 @@ int ReadBackupConfigFromIni(const fs::path& iniPath, std::ofstream& logFile) {
 
                     if (key == "Backup") {
                         if (value == "true" || value == "True" || value == "TRUE") {
-                            backupValue = 2;  // Valor especial: siempre hacer backup
+                            backupValue = 2;
                             logFile << "Read backup config: Backup = true (always backup mode)" << std::endl;
                         } else {
                             try {
@@ -770,8 +1004,6 @@ void UpdateBackupConfigInIni(const fs::path& iniPath, std::ofstream& logFile, in
     }
 }
 
-// ===== BACKUP LITERAL BYTE-POR-BYTE =====
-
 bool PerformLiteralJsonBackup(const fs::path& originalJsonPath, const fs::path& backupJsonPath,
                               std::ofstream& logFile) {
     try {
@@ -782,7 +1014,6 @@ bool PerformLiteralJsonBackup(const fs::path& originalJsonPath, const fs::path& 
 
         CreateDirectoryIfNotExists(backupJsonPath.parent_path());
 
-        // COPIA LITERAL PERFECTA - SIN PROCESAMIENTO
         std::error_code ec;
         fs::copy_file(originalJsonPath, backupJsonPath, fs::copy_options::overwrite_existing, ec);
 
@@ -791,7 +1022,6 @@ bool PerformLiteralJsonBackup(const fs::path& originalJsonPath, const fs::path& 
             return false;
         }
 
-        // Verificación de integridad byte-por-byte
         try {
             auto originalSize = fs::file_size(originalJsonPath);
             auto backupSize = fs::file_size(backupJsonPath);
@@ -818,8 +1048,6 @@ bool PerformLiteralJsonBackup(const fs::path& originalJsonPath, const fs::path& 
         return false;
     }
 }
-
-// ===== VERIFICACIÓN TRIPLE DE INTEGRIDAD =====
 
 bool PerformTripleValidation(const fs::path& jsonPath, const fs::path& backupPath, std::ofstream& logFile) {
     try {
@@ -853,14 +1081,12 @@ bool PerformTripleValidation(const fs::path& jsonPath, const fs::path& backupPat
             return false;
         }
 
-        // VALIDACIÓN 1: Estructura JSON básica
         content = Trim(content);
         if (!content.starts_with('{') || !content.ends_with('}')) {
             logFile << "ERROR: JSON file does not have proper structure (missing braces)" << std::endl;
             return false;
         }
 
-        // VALIDACIÓN 2: Balance de llaves y corchetes
         int braceCount = 0;
         int bracketCount = 0;
         bool inString = false;
@@ -888,7 +1114,6 @@ bool PerformTripleValidation(const fs::path& jsonPath, const fs::path& backupPat
             return false;
         }
 
-        // VALIDACIÓN 3: Clave OSoundtracks esperada
         int foundKeys = 0;
         if (content.find("\"SoundKey\"") != std::string::npos) {
             foundKeys++;
@@ -912,7 +1137,7 @@ bool PerformTripleValidation(const fs::path& jsonPath, const fs::path& backupPat
     }
 }
 
-// ===== ANÁLISIS FORENSE AUTOMÁTICO =====
+// ===== AUTOMATIC FORENSIC ANALYSIS =====
 
 bool MoveCorruptedJsonToAnalysis(const fs::path& corruptedJsonPath, const fs::path& analysisDir,
                                  std::ofstream& logFile) {
@@ -924,7 +1149,6 @@ bool MoveCorruptedJsonToAnalysis(const fs::path& corruptedJsonPath, const fs::pa
 
         CreateDirectoryIfNotExists(analysisDir);
 
-        // Generar nombre único con timestamp
         auto now = std::chrono::system_clock::now();
         std::time_t time_t = std::chrono::system_clock::to_time_t(now);
         std::tm tm;
@@ -955,7 +1179,7 @@ bool MoveCorruptedJsonToAnalysis(const fs::path& corruptedJsonPath, const fs::pa
     }
 }
 
-// ===== RESTAURACIÓN DESDE BACKUP =====
+// ===== RESTORE FROM BACKUP =====
 
 bool RestoreJsonFromBackup(const fs::path& backupJsonPath, const fs::path& originalJsonPath,
                            const fs::path& analysisDir, std::ofstream& logFile) {
@@ -965,7 +1189,6 @@ bool RestoreJsonFromBackup(const fs::path& backupJsonPath, const fs::path& origi
             return false;
         }
 
-        // Verificar integridad del backup antes de restaurar
         if (!PerformTripleValidation(backupJsonPath, fs::path(), logFile)) {
             logFile << "ERROR: Backup JSON file is also corrupted, cannot restore!" << std::endl;
             return false;
@@ -973,12 +1196,10 @@ bool RestoreJsonFromBackup(const fs::path& backupJsonPath, const fs::path& origi
 
         logFile << "WARNING: Original JSON appears corrupted, restoring from backup..." << std::endl;
 
-        // Mover archivo corrupto a análisis forense
         if (fs::exists(originalJsonPath)) {
             MoveCorruptedJsonToAnalysis(originalJsonPath, analysisDir, logFile);
         }
 
-        // RESTAURAR USANDO COPIA LITERAL
         std::error_code ec;
         fs::copy_file(backupJsonPath, originalJsonPath, fs::copy_options::overwrite_existing, ec);
 
@@ -987,7 +1208,6 @@ bool RestoreJsonFromBackup(const fs::path& backupJsonPath, const fs::path& origi
             return false;
         }
 
-        // Verificar que la restauración fue exitosa
         if (PerformTripleValidation(originalJsonPath, fs::path(), logFile)) {
             logFile << "SUCCESS: JSON restored from backup successfully!" << std::endl;
             return true;
@@ -1003,14 +1223,14 @@ bool RestoreJsonFromBackup(const fs::path& backupJsonPath, const fs::path& origi
         return false;
     }
 }
-// ===== CORRECCIÓN COMPLETA DE INDENTACIÓN CON EMPTY INLINE Y MULTI-LINE EMPTY DETECTION =====
+
+// ===== COMPLETE INDENTATION CORRECTION WITH EMPTY INLINE AND MULTI-LINE EMPTY DETECTION =====
 
 bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDir, std::ofstream& logFile) {
     try {
         logFile << "Checking and correcting JSON indentation hierarchy..." << std::endl;
         logFile << "----------------------------------------------------" << std::endl;
 
-        // Leer el JSON actual
         if (!fs::exists(jsonPath)) {
             logFile << "ERROR: JSON file does not exist for indentation correction" << std::endl;
             return false;
@@ -1035,7 +1255,6 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
             return false;
         }
 
-        // Verificar si necesita corrección
         bool needsCorrection = false;
         std::vector<std::string> lines;
         std::stringstream ss(originalContent);
@@ -1045,10 +1264,9 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
             lines.push_back(line);
         }
 
-        // Analizar indentación actual - verificar si NO cumple con exactamente 4 espacios por nivel
         for (const auto& currentLine : lines) {
             if (currentLine.empty()) continue;
-            if (currentLine.find_first_not_of(" \t") == std::string::npos) continue;  // Solo espacios
+            if (currentLine.find_first_not_of(" \t") == std::string::npos) continue;
 
             size_t leadingSpaces = 0;
             size_t leadingTabs = 0;
@@ -1062,31 +1280,25 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
                     break;
             }
 
-            // Si hay tabs O si los espacios no son múltiplos exactos de 4, necesita corrección
             if (leadingTabs > 0 || (leadingSpaces > 0 && leadingSpaces % 4 != 0)) {
                 needsCorrection = true;
                 break;
             }
         }
 
-        // NUEVA VERIFICACIÓN: Detectar contenedores vacíos multi-línea que necesitan corrección
         if (!needsCorrection) {
             for (size_t i = 0; i < lines.size() - 1; i++) {
                 std::string currentTrimmed = Trim(lines[i]);
 
-                // Verificar si la línea actual termina con { o [
                 if (currentTrimmed.ends_with("{") || currentTrimmed.ends_with("[")) {
                     char openChar = currentTrimmed.back();
                     char closeChar = (openChar == '{') ? '}' : ']';
 
-                    // Buscar la línea de cierre correspondiente
                     for (size_t j = i + 1; j < lines.size(); j++) {
                         std::string nextTrimmed = Trim(lines[j]);
 
-                        // Si encontramos el carácter de cierre
                         if (nextTrimmed == std::string(1, closeChar) ||
                             nextTrimmed == std::string(1, closeChar) + ",") {
-                            // Verificar si hay solo espacios en blanco entre apertura y cierre
                             bool hasOnlyWhitespace = true;
                             for (size_t k = i + 1; k < j; k++) {
                                 if (!Trim(lines[k]).empty()) {
@@ -1103,7 +1315,6 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
                             }
                         }
 
-                        // Si encontramos contenido real, no es un contenedor vacío
                         if (!nextTrimmed.empty() && nextTrimmed != std::string(1, closeChar) &&
                             nextTrimmed != std::string(1, closeChar) + ",") {
                             break;
@@ -1127,14 +1338,11 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
                    "hierarchy and inline empty containers..."
                 << std::endl;
 
-        // ALGORITMO MEJORADO: Reformat completo con exactamente 4 espacios por nivel + MEJOR DETECCIÓN DE EMPTY
-        // CONTAINERS
         std::ostringstream correctedJson;
         int indentLevel = 0;
         bool inString = false;
         bool escape = false;
 
-        // ===== FUNCIÓN HELPER MEJORADA PARA DETECTAR SI UN BLOQUE ESTÁ VACÍO (INCLUYENDO MULTI-LÍNEA) =====
         auto isEmptyBlock = [&originalContent](size_t startPos, char openChar, char closeChar) -> bool {
             size_t pos = startPos + 1;
             int depth = 1;
@@ -1164,10 +1372,9 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
                     } else if (c == closeChar) {
                         depth--;
                         if (depth == 0) {
-                            // Encontrado el cierre, verificar si solo hay espacios en blanco entre apertura y cierre
                             std::string between = originalContent.substr(startPos + 1, pos - startPos - 1);
                             std::string trimmedBetween = Trim(between);
-                            return trimmedBetween.empty();  // Solo espacios en blanco o completamente vacío
+                            return trimmedBetween.empty();
                         }
                     }
                 }
@@ -1205,9 +1412,7 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
             switch (c) {
                 case '{':
                 case '[':
-                    // NUEVA LÓGICA MEJORADA: Verificar si es un bloque vacío (incluyendo multi-línea)
                     if (isEmptyBlock(i, c, (c == '{') ? '}' : ']')) {
-                        // Encontrar el carácter de cierre
                         size_t pos = i + 1;
                         int depth = 1;
                         bool inStr = false;
@@ -1240,11 +1445,9 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
                             pos++;
                         }
 
-                        // Escribir el bloque vacío en la misma línea
                         correctedJson << c << ((c == '{') ? '}' : ']');
-                        i = pos - 1;  // Saltar hasta después del carácter de cierre
+                        i = pos - 1;
 
-                        // Verificar si necesitamos nueva línea después
                         if (i + 1 < originalContent.length()) {
                             size_t nextNonSpace = i + 1;
                             while (nextNonSpace < originalContent.length() &&
@@ -1261,11 +1464,9 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
                             }
                         }
                     } else {
-                        // Bloque NO vacío: usar formato normal
                         correctedJson << c << '\n';
                         indentLevel++;
 
-                        // Agregar indentación exacta de 4 espacios por nivel
                         for (int j = 0; j < indentLevel * 4; j++) {
                             correctedJson << ' ';
                         }
@@ -1273,7 +1474,6 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
                     break;
                 case '}':
                 case ']':
-                    // Ir a nueva línea y reducir indentación
                     correctedJson << '\n';
                     indentLevel--;
                     for (int j = 0; j < indentLevel * 4; j++) {
@@ -1281,7 +1481,6 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
                     }
                     correctedJson << c;
 
-                    // Verificar si necesitamos nueva línea después
                     if (i + 1 < originalContent.length()) {
                         size_t nextNonSpace = i + 1;
                         while (nextNonSpace < originalContent.length() && std::isspace(originalContent[nextNonSpace])) {
@@ -1300,7 +1499,6 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
                 case ',':
                     correctedJson << c << '\n';
 
-                    // Agregar indentación exacta para la siguiente línea
                     for (int j = 0; j < indentLevel * 4; j++) {
                         correctedJson << ' ';
                     }
@@ -1312,7 +1510,6 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
                 case '\t':
                 case '\n':
                 case '\r':
-                    // Ignorar espacios en blanco existentes - los controlamos nosotros
                     break;
                 default:
                     correctedJson << c;
@@ -1322,20 +1519,17 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
 
         std::string correctedContent = correctedJson.str();
 
-        // Limpiar líneas vacías con solo espacios y normalizar
         std::vector<std::string> finalLines;
         std::stringstream finalSS(correctedContent);
         std::string finalLine;
 
         while (std::getline(finalSS, finalLine)) {
-            // Eliminar espacios al final de línea
             while (!finalLine.empty() && finalLine.back() == ' ') {
                 finalLine.pop_back();
             }
             finalLines.push_back(finalLine);
         }
 
-        // Reconstruir el JSON final
         std::ostringstream finalJson;
         for (size_t i = 0; i < finalLines.size(); i++) {
             finalJson << finalLines[i];
@@ -1346,7 +1540,6 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
 
         std::string finalContent = finalJson.str();
 
-        // Escribir el JSON corregido
         fs::path tempPath = jsonPath;
         tempPath.replace_extension(".indent_corrected.tmp");
 
@@ -1364,7 +1557,6 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
             return false;
         }
 
-        // Verificar integridad del archivo corregido
         if (!PerformTripleValidation(tempPath, fs::path(), logFile)) {
             logFile << "ERROR: Corrected JSON failed integrity check!" << std::endl;
             MoveCorruptedJsonToAnalysis(tempPath, analysisDir, logFile);
@@ -1375,7 +1567,6 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
             return false;
         }
 
-        // Reemplazar el archivo original
         std::error_code ec;
         fs::rename(tempPath, jsonPath, ec);
 
@@ -1388,7 +1579,6 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
             return false;
         }
 
-        // Verificación final
         if (PerformTripleValidation(jsonPath, fs::path(), logFile)) {
             logFile << "SUCCESS: JSON indentation corrected successfully!" << std::endl;
             logFile << " Applied perfect 4-space hierarchy with inline empty containers (including multi-line empty "
@@ -1409,7 +1599,7 @@ bool CorrectJsonIndentation(const fs::path& jsonPath, const fs::path& analysisDi
     }
 }
 
-// ===== PARSER JSON CONSERVADOR CON FORMATO DE 4 ESPACIOS Y PLAYBACK =====
+// ===== CONSERVATIVE JSON PARSER WITH 4-SPACE FORMAT AND PLAYBACK =====
 
 std::string PreserveOriginalSections(const std::string& originalJson,
                                      const std::map<std::string, OrderedPluginData>& processedData,
@@ -1418,25 +1608,20 @@ std::string PreserveOriginalSections(const std::string& originalJson,
         const std::set<std::string> validKeys = {"SoundKey"};
         std::string result = originalJson;
 
-        // Solo modificar la clave válida que tiene datos
         for (const auto& [key, data] : processedData) {
             if (validKeys.count(key) && !data.orderedData.empty()) {
-                // Buscar la posición de esta clave en el JSON original
                 std::string keyPattern = "\"" + key + "\"";
                 size_t keyPos = result.find(keyPattern);
 
                 if (keyPos != std::string::npos) {
-                    // Encontrar el inicio del valor (después del :)
                     size_t colonPos = result.find(":", keyPos);
                     if (colonPos != std::string::npos) {
                         size_t valueStart = colonPos + 1;
 
-                        // Saltar espacios en blanco
                         while (valueStart < result.length() && std::isspace(result[valueStart])) {
                             valueStart++;
                         }
 
-                        // Encontrar el final del valor
                         size_t valueEnd = valueStart;
                         if (valueStart < result.length() && result[valueStart] == '{') {
                             int braceCount = 1;
@@ -1458,7 +1643,6 @@ std::string PreserveOriginalSections(const std::string& originalJson,
                                 valueEnd++;
                             }
 
-                            // Generar nuevo valor con indentación de exactamente 4 espacios por nivel Y PLAYBACK
                             std::ostringstream newValue;
                             newValue << "{\n";
                             bool first = true;
@@ -1467,7 +1651,6 @@ std::string PreserveOriginalSections(const std::string& originalJson,
                                 if (!first) newValue << ",\n";
                                 first = false;
 
-                                // Nivel 2: 8 espacios (2 niveles * 4 espacios)
                                 newValue << "        \"" << EscapeJson(animationKey) << "\": [\n";
 
                                 bool firstEntry = true;
@@ -1475,19 +1658,15 @@ std::string PreserveOriginalSections(const std::string& originalJson,
                                     if (!firstEntry) newValue << ",\n";
                                     firstEntry = false;
 
-                                    // Nivel 3: 12 espacios (3 niveles * 4 espacios)
                                     newValue << "            \"" << EscapeJson(swp.soundFile) << "\",\n";
                                     newValue << "            \"" << swp.playback << "\"";
                                 }
 
-                                // Cerrar array con nivel 2: 8 espacios
                                 newValue << "\n        ]";
                             }
 
-                            // Cerrar objeto con nivel 1: 4 espacios
                             newValue << "\n    }";
 
-                            // Reemplazar el valor en el resultado
                             result.replace(valueStart, valueEnd - valueStart, newValue.str());
                             logFile << "INFO: Successfully updated key '" << key
                                     << "' with proper 4-space indentation and playback data" << std::endl;
@@ -1500,39 +1679,34 @@ std::string PreserveOriginalSections(const std::string& originalJson,
         return result;
     } catch (const std::exception& e) {
         logFile << "ERROR in PreserveOriginalSections: " << e.what() << std::endl;
-        return originalJson;  // Fallback al original
+        return originalJson;
     } catch (...) {
         logFile << "ERROR in PreserveOriginalSections: Unknown exception" << std::endl;
-        return originalJson;  // Fallback al original
+        return originalJson;
     }
 }
 
-// ===== VERIFICACIÓN DE CAMBIOS NECESARIOS CON PLAYBACK =====
+// ===== CHECK IF CHANGES ARE NEEDED WITH PLAYBACK =====
 
 bool CheckIfChangesNeeded(const std::string& originalJson,
                           const std::map<std::string, OrderedPluginData>& processedData) {
     const std::vector<std::string> validKeys = {"SoundKey"};
 
     for (const auto& key : validKeys) {
-        // Verificar si la clave existe en processedData y tiene datos
         auto it = processedData.find(key);
         if (it != processedData.end() && !it->second.orderedData.empty()) {
-            // Buscar la clave en el JSON original
             std::string keyPattern = "\"" + key + "\"";
             size_t keyPos = originalJson.find(keyPattern);
 
             if (keyPos != std::string::npos) {
-                // Encontrar el inicio del valor (después del :)
                 size_t colonPos = originalJson.find(":", keyPos);
                 if (colonPos != std::string::npos) {
                     size_t valueStart = colonPos + 1;
 
-                    // Saltar espacios en blanco
                     while (valueStart < originalJson.length() && std::isspace(originalJson[valueStart])) {
                         valueStart++;
                     }
 
-                    // Encontrar el final del valor
                     size_t valueEnd = valueStart;
                     if (valueStart < originalJson.length() && originalJson[valueStart] == '{') {
                         int braceCount = 1;
@@ -1554,10 +1728,8 @@ bool CheckIfChangesNeeded(const std::string& originalJson,
                             valueEnd++;
                         }
 
-                        // Extraer el contenido actual de la clave en el JSON original
                         std::string currentValue = originalJson.substr(valueStart, valueEnd - valueStart);
 
-                        // Generar el valor esperado basado en processedData CON PLAYBACK
                         std::ostringstream expectedValue;
                         expectedValue << "{\n";
                         bool first = true;
@@ -1578,11 +1750,9 @@ bool CheckIfChangesNeeded(const std::string& originalJson,
                         }
                         expectedValue << "\n    }";
 
-                        // Comparar valores (ignorando espacios en blanco)
                         std::string cleanCurrent = currentValue;
                         std::string cleanExpected = expectedValue.str();
 
-                        // Función helper para limpiar espacios
                         auto cleanWhitespace = [](std::string& str) {
                             str.erase(std::remove_if(str.begin(), str.end(), ::isspace), str.end());
                         };
@@ -1591,22 +1761,20 @@ bool CheckIfChangesNeeded(const std::string& originalJson,
                         cleanWhitespace(cleanExpected);
 
                         if (cleanCurrent != cleanExpected) {
-                            return true;  // Se necesita escribir
+                            return true;
                         }
                     }
                 } else {
-                    // La clave no existe en el JSON original pero tiene datos procesados
-                    return true;  // Se necesita escribir
+                    return true;
                 }
             }
         }
     }
 
-    // Si el bucle termina sin encontrar diferencias, no hay cambios.
-    return false;  // No se necesita escribir
+    return false;
 }
 
-// ===== PARSEAR DATOS EXISTENTES DEL JSON CON PLAYBACK =====
+// ===== PARSE EXISTING DATA FROM JSON WITH PLAYBACK =====
 
 std::vector<std::pair<std::string, std::vector<SoundWithPlayback>>> parseOrderedPlugins(const std::string& content) {
     std::vector<std::pair<std::string, std::vector<SoundWithPlayback>>> result;
@@ -1622,7 +1790,6 @@ std::vector<std::pair<std::string, std::vector<SoundWithPlayback>>> parseOrdered
 
     try {
         while (pos < len && iter++ < maxIters) {
-            // Saltar espacios en blanco
             while (pos < len && std::isspace(static_cast<unsigned char>(str[pos]))) ++pos;
             if (pos >= len) break;
 
@@ -1634,7 +1801,6 @@ std::vector<std::pair<std::string, std::vector<SoundWithPlayback>>> parseOrdered
             size_t keyStart = pos + 1;
             ++pos;
 
-            // Encontrar final de clave (animationKey)
             while (pos < len) {
                 if (str[pos] == '"') {
                     size_t backslashCount = 0;
@@ -1651,23 +1817,22 @@ std::vector<std::pair<std::string, std::vector<SoundWithPlayback>>> parseOrdered
             if (pos >= len) break;
 
             std::string animationKey = content.substr(keyStart, pos - keyStart);
-            ++pos;  // skip closing "
+            ++pos;
 
-            // Buscar :
             while (pos < len && std::isspace(static_cast<unsigned char>(str[pos]))) ++pos;
             if (pos >= len || str[pos] != ':') {
                 ++pos;
                 continue;
             }
 
-            ++pos;  // skip :
+            ++pos;
             while (pos < len && std::isspace(static_cast<unsigned char>(str[pos]))) ++pos;
             if (pos >= len || str[pos] != '[') {
                 ++pos;
                 continue;
             }
 
-            ++pos;  // skip [
+            ++pos;
 
             std::vector<SoundWithPlayback> sounds;
             sounds.reserve(50);
@@ -1678,11 +1843,10 @@ std::vector<std::pair<std::string, std::vector<SoundWithPlayback>>> parseOrdered
                 if (pos >= len) break;
 
                 if (str[pos] == ']') {
-                    ++pos;  // skip ]
+                    ++pos;
                     break;
                 }
 
-                // Parsear primer elemento (nombre del sonido)
                 if (str[pos] != '"') {
                     ++pos;
                     continue;
@@ -1707,17 +1871,15 @@ std::vector<std::pair<std::string, std::vector<SoundWithPlayback>>> parseOrdered
                 if (pos >= len) break;
 
                 std::string soundFile = content.substr(soundStart, pos - soundStart);
-                ++pos;  // skip closing "
+                ++pos;
 
-                // Buscar coma después del sound file
                 while (pos < len && std::isspace(static_cast<unsigned char>(str[pos]))) ++pos;
                 if (pos < len && str[pos] == ',') {
-                    ++pos;  // skip ,
+                    ++pos;
                     while (pos < len && std::isspace(static_cast<unsigned char>(str[pos]))) ++pos;
                 }
 
-                // Parsear segundo elemento (tiempo en segundos)
-                std::string playback = "0";  // valor por defecto: 0 segundos
+                std::string playback = "0";
 
                 if (pos < len && str[pos] == '"') {
                     size_t playbackStart = pos + 1;
@@ -1738,7 +1900,7 @@ std::vector<std::pair<std::string, std::vector<SoundWithPlayback>>> parseOrdered
 
                     if (pos < len) {
                         playback = content.substr(playbackStart, pos - playbackStart);
-                        ++pos;  // skip closing "
+                        ++pos;
                     }
                 }
 
@@ -1746,7 +1908,7 @@ std::vector<std::pair<std::string, std::vector<SoundWithPlayback>>> parseOrdered
 
                 while (pos < len && std::isspace(static_cast<unsigned char>(str[pos]))) ++pos;
                 if (pos < len && str[pos] == ',') {
-                    ++pos;  // skip ,
+                    ++pos;
                     while (pos < len && std::isspace(static_cast<unsigned char>(str[pos]))) ++pos;
                 }
             }
@@ -1759,13 +1921,11 @@ std::vector<std::pair<std::string, std::vector<SoundWithPlayback>>> parseOrdered
             }
         }
     } catch (...) {
-        // En caso de error, retornar lo que se haya parseado
     }
 
     return result;
 }
 
-// FUNCIÓN MODIFICADA: NO AGREGAR datos del JSON existente, solo leer para referencia
 std::pair<bool, std::string> ReadCompleteJson(const fs::path& jsonPath,
                                               std::map<std::string, OrderedPluginData>& processedData,
                                               std::ofstream& logFile) {
@@ -1792,7 +1952,7 @@ std::pair<bool, std::string> ReadCompleteJson(const fs::path& jsonPath,
         size_t fileSize = jsonFile.tellg();
         jsonFile.seekg(0, std::ios::beg);
 
-        const size_t maxFileSize = 50 * 1024 * 1024;  // 50MB
+        const size_t maxFileSize = 50 * 1024 * 1024;
         if (fileSize > maxFileSize) {
             logFile << "WARNING: JSON file is very large (" << fileSize << " bytes), limiting to " << maxFileSize
                     << " bytes" << std::endl;
@@ -1809,8 +1969,6 @@ std::pair<bool, std::string> ReadCompleteJson(const fs::path& jsonPath,
             return {false, ""};
         }
 
-        // NO PARSEAR NI AGREGAR datos del JSON existente a processedData
-        // Solo retornar el contenido para preservación
         logFile << "JSON content read successfully (" << fileSize << " bytes)" << std::endl;
         logFile << std::endl;
 
@@ -1824,12 +1982,11 @@ std::pair<bool, std::string> ReadCompleteJson(const fs::path& jsonPath,
     }
 }
 
-// ===== ESCRITURA ATÓMICA ULTRA-SEGURA =====
+// ===== ULTRA-SAFE ATOMIC WRITE =====
 
 bool WriteJsonAtomically(const fs::path& jsonPath, const std::string& content, const fs::path& analysisDir,
                          std::ofstream& logFile) {
     try {
-        // Escribir a archivo temporal primero
         fs::path tempPath = jsonPath;
         tempPath.replace_extension(".tmp");
 
@@ -1847,10 +2004,8 @@ bool WriteJsonAtomically(const fs::path& jsonPath, const std::string& content, c
             return false;
         }
 
-        // Verificar integridad del archivo temporal
         if (!PerformTripleValidation(tempPath, fs::path(), logFile)) {
             logFile << "ERROR: Temporary JSON file failed integrity check!" << std::endl;
-            // Mover archivo temporal defectuoso a análisis
             MoveCorruptedJsonToAnalysis(tempPath, analysisDir, logFile);
             try {
                 fs::remove(tempPath);
@@ -1859,7 +2014,6 @@ bool WriteJsonAtomically(const fs::path& jsonPath, const std::string& content, c
             return false;
         }
 
-        // Mover el archivo temporal al destino final
         std::error_code ec;
         fs::rename(tempPath, jsonPath, ec);
 
@@ -1872,13 +2026,11 @@ bool WriteJsonAtomically(const fs::path& jsonPath, const std::string& content, c
             return false;
         }
 
-        // Verificación final
         if (PerformTripleValidation(jsonPath, fs::path(), logFile)) {
             logFile << "SUCCESS: JSON file written atomically and verified!" << std::endl;
             return true;
         } else {
             logFile << "ERROR: Final JSON file failed integrity check!" << std::endl;
-            // Mover archivo final defectuoso a análisis
             MoveCorruptedJsonToAnalysis(jsonPath, analysisDir, logFile);
             return false;
         }
@@ -1891,13 +2043,12 @@ bool WriteJsonAtomically(const fs::path& jsonPath, const std::string& content, c
     }
 }
 
-// ===== ACTUALIZACIÓN DE CONTEOS INI (AUNQUE OSoundtracks NO LO NECESITA) =====
 bool UpdateIniRuleCount(const fs::path& iniPath, const std::string& originalLine, int newCount,
                         std::ofstream& logFile) {
-    // OSoundtracks no usa conteos, pero mantenemos la función por compatibilidad del diagrama
     return true;
 }
-// ===== FUNCIÓN PRINCIPAL CORREGIDA CON REEMPLAZO Y LIMPIEZA DE KEYS =====
+
+// ===== MODIFIED MAIN FUNCTION WITH IMPROVED DETECTION FOR WABBAJACK/MO2 =====
 
 extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface* skse) {
     try {
@@ -1909,7 +2060,6 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
                     std::string documentsPath;
                     std::string gamePath;
 
-                    // Obtener rutas de manera ultra-segura
                     try {
                         documentsPath = GetDocumentsPath();
                         gamePath = GetGamePath();
@@ -1919,17 +2069,6 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
                         documentsPath = "C:\\Users\\Default\\Documents";
                         gamePath = "";
                     }
-
-                    if (gamePath.empty() || documentsPath.empty()) {
-                        RE::ConsoleLog::GetSingleton()->Print(
-                            "OSoundtracks Assistant: Could not find Game or Documents path.");
-                        return;
-                    }
-
-                    // Configuración de rutas y logging
-                    fs::path dataPath = fs::path(gamePath) / "Data";
-                    fs::path sksePluginsPath = dataPath / "SKSE" / "Plugins";
-                    CreateDirectoryIfNotExists(sksePluginsPath);
 
                     fs::path logFilePath = fs::path(documentsPath) / "My Games" / "Skyrim Special Edition" / "SKSE" /
                                            "OSoundtracks_SA_Expansion_Sounds_NG.log";
@@ -1943,15 +2082,147 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
                     localtime_s(&buf, &in_time_t);
 
                     logFile << "====================================================" << std::endl;
-                    logFile << "OSoundtracks SA Expansion Sounds NG - REPLACEMENT MODE WITH CLEANUP" << std::endl;
+                    logFile << "OSoundtracks SA Expansion Sounds NG v" << PLUGIN_VERSION << std::endl;
+                    logFile << "REPLACEMENT MODE WITH CLEANUP" << std::endl;
+                    logFile << "ENHANCED PATH DETECTION - Wabbajack/MO2 Compatible" << std::endl;
                     logFile << "Log created on: " << std::put_time(&buf, "%Y-%m-%d %H:%M:%S") << std::endl;
                     logFile << "====================================================" << std::endl << std::endl;
 
-                    // RUTAS PRINCIPALES
+                    const std::string jsonFilename = "OSoundtracks-SA-Expansion-Sounds-NG.json";
+                    fs::path jsonOutputPath;
+                    fs::path iniSearchPath;
+                    fs::path sksePluginsPath;
+                    bool pathDetectionSuccessful = false;
+
+                    logFile << "Searching for game installation with ENHANCED MULTI-ENVIRONMENT detection..." << std::endl;
+                    logFile << "----------------------------------------------------" << std::endl;
+
+                    std::string mo2OverwritePath = GetEnvVar("MO_OVERWRITE_PATH");
+
+                    if (!mo2OverwritePath.empty()) {
+                        fs::path mo2Path = fs::path(mo2OverwritePath) / "SKSE" / "Plugins";
+                        logFile << "METHOD 1: Trying MO2 Overwrite path: " << mo2Path.string() << std::endl;
+
+                        if (fs::exists(mo2Path) && IsValidPluginPath(mo2Path, logFile)) {
+                            sksePluginsPath = mo2Path;
+                            iniSearchPath = fs::path(mo2OverwritePath);
+                            
+                            fs::path tempJsonPath;
+                            if (FindFileWithFallback(mo2Path, jsonFilename, tempJsonPath, logFile)) {
+                                jsonOutputPath = tempJsonPath;
+                                pathDetectionSuccessful = true;
+                                logFile << "SUCCESS: Valid installation in MO2 Overwrite" << std::endl;
+                            }
+                        } else {
+                            logFile << "MO2 path exists but DLL validation failed" << std::endl;
+                        }
+                    }
+
+                    if (!pathDetectionSuccessful) {
+                        std::string gamePathEnhanced = GetGamePathEnhanced(logFile);
+                        
+                        if (!gamePathEnhanced.empty()) {
+                            fs::path standardPath = BuildPathCaseInsensitive(
+                                fs::path(gamePathEnhanced),
+                                {"Data", "SKSE", "Plugins"},
+                                logFile
+                            );
+                            
+                            logFile << "METHOD 2: Trying standard game path: " << standardPath.string() << std::endl;
+
+                            if (fs::exists(standardPath) && IsValidPluginPath(standardPath, logFile)) {
+                                sksePluginsPath = standardPath;
+                                iniSearchPath = BuildPathCaseInsensitive(
+                                    fs::path(gamePathEnhanced),
+                                    {"Data"},
+                                    logFile
+                                );
+                                
+                                fs::path tempJsonPath;
+                                if (FindFileWithFallback(standardPath, jsonFilename, tempJsonPath, logFile)) {
+                                    jsonOutputPath = tempJsonPath;
+                                    pathDetectionSuccessful = true;
+                                    logFile << "SUCCESS: Valid installation at standard game path" << std::endl;
+                                }
+                            } else {
+                                logFile << "Standard path exists but DLL validation failed" << std::endl;
+                            }
+                        } else {
+                            logFile << "No game path detected from registry or common locations" << std::endl;
+                        }
+                    }
+
+                    if (!pathDetectionSuccessful) {
+                        logFile << std::endl;
+                        logFile << "METHOD 3: DLL Directory Detection (Wabbajack/MO2 Portable/Nolvus fallback)" << std::endl;
+                        logFile << "This method works for: Wabbajack modpacks, portable installs, network drives" << std::endl;
+                        
+                        fs::path dllDir = GetDllDirectory(logFile);
+                        
+                        if (!dllDir.empty()) {
+                            fs::path calculatedGamePath = dllDir.parent_path().parent_path().parent_path();
+                            
+                            logFile << "DLL directory detected: " << dllDir.string() << std::endl;
+                            logFile << "Calculated game root: " << calculatedGamePath.string() << std::endl;
+                            
+                            sksePluginsPath = dllDir;
+                            iniSearchPath = BuildPathCaseInsensitive(
+                                calculatedGamePath,
+                                {"Data"},
+                                logFile
+                            );
+                            
+                            if (IsValidPluginPath(sksePluginsPath, logFile)) {
+                                fs::path tempJsonPath;
+                                if (FindFileWithFallback(sksePluginsPath, jsonFilename, tempJsonPath, logFile)) {
+                                    jsonOutputPath = tempJsonPath;
+                                    pathDetectionSuccessful = true;
+                                    logFile << "SUCCESS: DLL directory method successful (Wabbajack/Portable detected)" << std::endl;
+                                } else {
+                                    logFile << "DLL path valid but JSON not found" << std::endl;
+                                }
+                            } else {
+                                logFile << "DLL directory validation failed" << std::endl;
+                            }
+                        } else {
+                            logFile << "Could not determine DLL directory" << std::endl;
+                        }
+                    }
+
+                    if (!pathDetectionSuccessful) {
+                        logFile << std::endl;
+                        logFile << "=====================================================" << std::endl;
+                        logFile << "  CRITICAL ERROR: NO VALID PATH DETECTED!" << std::endl;
+                        logFile << "=====================================================" << std::endl;
+                        logFile << std::endl;
+                        logFile << "All detection methods failed:" << std::endl;
+                        logFile << "  METHOD 1 (MO2 Variables): FAILED" << std::endl;
+                        logFile << "  METHOD 2 (Registry/Standard): FAILED" << std::endl;
+                        logFile << "  METHOD 3 (DLL Directory - Wabbajack fallback): FAILED" << std::endl;
+                        logFile << std::endl;
+                        logFile << "POSSIBLE SOLUTIONS:" << std::endl;
+                        logFile << "1. Reinstall OSoundtracks and this expansion" << std::endl;
+                        logFile << "2. Run SKSE through Mod Organizer 2 if using MO2" << std::endl;
+                        logFile << "3. For Wabbajack/Nolvus: Ensure the DLL is in Data/SKSE/Plugins/" << std::endl;
+                        logFile << "4. Check mod installation in your mod manager" << std::endl;
+                        logFile << "5. Verify Skyrim SE is properly installed" << std::endl;
+                        logFile << "====================================================" << std::endl;
+                        logFile.close();
+
+                        RE::ConsoleLog::GetSingleton()->Print(
+                            "CRITICAL: OSoundtracks path detection FAILED! Check log file.");
+                        return;
+                    }
+
+                    logFile << std::endl;
+                    logFile << "SUCCESS: Paths detected successfully" << std::endl;
+                    logFile << "JSON file: " << jsonOutputPath.string() << std::endl;
+                    logFile << "INI search path: " << iniSearchPath.string() << std::endl;
+                    logFile << "SKSE Plugins path: " << sksePluginsPath.string() << std::endl;
+                    logFile << std::endl;
+
                     fs::path backupConfigIniPath = sksePluginsPath / "OSoundtracks-SA-Expansion-Sounds-NG.ini";
-                    fs::path jsonOutputPath = sksePluginsPath / "OSoundtracks-SA-Expansion-Sounds-NG.json";
-                    fs::path backupJsonPath =
-                        sksePluginsPath / "Backup_OSoundtracks" / "OSoundtracks-SA-Expansion-Sounds-NG.json";
+                    fs::path backupJsonPath = sksePluginsPath / "Backup_OSoundtracks" / "OSoundtracks-SA-Expansion-Sounds-NG.json";
                     fs::path analysisDir = sksePluginsPath / "Backup_OSoundtracks" / "Analysis";
 
                     logFile << "Checking backup configuration..." << std::endl;
@@ -1959,7 +2230,6 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
 
                     int backupValue = ReadBackupConfigFromIni(backupConfigIniPath, logFile);
 
-                    // ===== VALIDACIÓN DE INTEGRIDAD INICIAL CON RESTAURACIÓN AUTOMÁTICA =====
                     logFile << std::endl;
                     if (!PerformSimpleJsonIntegrityCheck(jsonOutputPath, logFile)) {
                         logFile << std::endl;
@@ -1967,7 +2237,6 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
                                    "from backup..."
                                 << std::endl;
 
-                        // Intentar restaurar desde el backup
                         if (RestoreJsonFromBackup(backupJsonPath, jsonOutputPath, analysisDir, logFile)) {
                             logFile << "SUCCESS: JSON restored from backup. Proceeding with the normal process."
                                     << std::endl;
@@ -1991,7 +2260,7 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
                             RE::ConsoleLog::GetSingleton()->Print(
                                 "CRITICAL ERROR: OSoundtracks JSON is corrupted and could not be restored! Check the "
                                 "log file for details.");
-                            return;  // TERMINACIÓN TEMPRANA DEL PROCESO
+                            return;
                         }
                     }
 
@@ -2001,7 +2270,6 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
                     logFile << "Cleanup: AnimationKeys not in INI files will be removed" << std::endl;
                     logFile << std::endl;
 
-                    // Inicializar estructuras de datos
                     const std::set<std::string> validKeys = {"SoundKey"};
                     std::map<std::string, OrderedPluginData> processedData;
 
@@ -2011,7 +2279,6 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
 
                     bool backupPerformed = false;
 
-                    // SISTEMA DE BACKUP LITERAL PERFECTO
                     if (backupValue == 1 || backupValue == 2) {
                         if (backupValue == 2) {
                             logFile << "Backup enabled (Backup = true), performing LITERAL backup always..."
@@ -2022,7 +2289,6 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
 
                         if (PerformLiteralJsonBackup(jsonOutputPath, backupJsonPath, logFile)) {
                             backupPerformed = true;
-                            // Solo actualizar INI si no es modo "true" (valor 2)
                             if (backupValue != 2) {
                                 UpdateBackupConfigInIni(backupConfigIniPath, logFile, backupValue);
                             }
@@ -2038,7 +2304,6 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
 
                     logFile << std::endl;
 
-                    // Leer el JSON existente PERO NO CARGAR SUS DATOS
                     auto readResult = ReadCompleteJson(jsonOutputPath, processedData, logFile);
                     bool readSuccess = readResult.first;
                     std::string originalJsonContent = readResult.second;
@@ -2054,9 +2319,9 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
                         }
 
                         if (!readSuccess) {
-                            logFile
-                                << "Process truncated due to JSON read error. No INI processing or updates performed."
-                                << std::endl;
+                            logFile << "Process truncated due to JSON read error. No INI processing or updates "
+                                       "performed."
+                                    << std::endl;
                             logFile << "====================================================" << std::endl;
                             logFile.close();
                             RE::ConsoleLog::GetSingleton()->Print(
@@ -2069,112 +2334,167 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
 
                     int totalRulesProcessed = 0;
                     int totalRulesApplied = 0;
-                    int totalRulesReplaced = 0;  // NUEVO CONTADOR
+                    int totalRulesReplaced = 0;
                     int totalRulesSkipped = 0;
                     int totalFilesProcessed = 0;
 
-                    logFile << "Scanning for OSoundtracksNG_*.ini files..." << std::endl;
+                    logFile << "Scanning for OSoundtracks_*.ini files..." << std::endl;
                     logFile << "----------------------------------------------------" << std::endl;
 
-                    // Procesar archivos .ini
+                    std::vector<fs::path> iniSearchPaths;
+
+                    if (!iniSearchPath.empty()) {
+                        iniSearchPaths.push_back(iniSearchPath);
+                        logFile << "INI search path: " << iniSearchPath.string() << std::endl;
+                    }
+
+                    if (!mo2OverwritePath.empty()) {
+                        fs::path mo2Path = fs::path(mo2OverwritePath);
+                        if (fs::exists(mo2Path) && std::find(iniSearchPaths.begin(), iniSearchPaths.end(), mo2Path) == iniSearchPaths.end()) {
+                            iniSearchPaths.push_back(mo2Path);
+                            logFile << "Additional search: MO2 Overwrite" << std::endl;
+                        }
+                    }
+
+                    logFile << std::endl;
+
                     try {
-                        for (const auto& entry : fs::directory_iterator(dataPath)) {
-                            if (entry.is_regular_file()) {
-                                std::string filename = entry.path().filename().string();
-                                if (filename.starts_with("OSoundtracksNG_") && filename.ends_with(".ini")) {
-                                    logFile << std::endl << "Processing file: " << filename << std::endl;
-                                    totalFilesProcessed++;
-
-                                    std::ifstream iniFile(entry.path());
-                                    if (!iniFile.is_open()) {
-                                        logFile << "  ERROR: Could not open file!" << std::endl;
-                                        continue;
-                                    }
-
-                                    std::string line;
-                                    int rulesInFile = 0;
-                                    int rulesAppliedInFile = 0;
-                                    int rulesReplacedInFile = 0;  // NUEVO CONTADOR
-                                    int rulesSkippedInFile = 0;
-
-                                    while (std::getline(iniFile, line)) {
-                                        std::string originalLine = line;
-
-                                        // Eliminar comentarios
-                                        size_t commentPos = line.find(';');
-                                        if (commentPos != std::string::npos) {
-                                            line = line.substr(0, commentPos);
+                        for (const auto& searchPath : iniSearchPaths) {
+                            if (!fs::exists(searchPath)) {
+                                logFile << "Path does not exist, skipping: " << searchPath.string() << std::endl;
+                                continue;
+                            }
+                            
+                            logFile << "Scanning: " << searchPath.string() << std::endl;
+                            
+                            try {
+                                for (const auto& entry : fs::directory_iterator(searchPath)) {
+                                    
+                                    if (!entry.is_regular_file()) continue;
+                                    
+                                    try {
+                                        std::wstring wPath = entry.path().wstring();
+                                        std::wstring wFilename = entry.path().filename().wstring();
+                                        
+                                        std::string fullPath = SafeWideStringToString(wPath);
+                                        std::string filename = SafeWideStringToString(wFilename);
+                                        
+                                        if (filename.empty() || fullPath.empty()) {
+                                            continue;
                                         }
-
-                                        commentPos = line.find('#');
-                                        if (commentPos != std::string::npos) {
-                                            line = line.substr(0, commentPos);
+                                        
+                                        bool matchesPattern = false;
+                                        
+                                        if (filename.starts_with("OSoundtracks_") && filename.ends_with(".ini")) {
+                                            matchesPattern = true;
                                         }
+                                        
+                                        if (!matchesPattern && wFilename.starts_with(L"OSoundtracks_") && wFilename.ends_with(L".ini")) {
+                                            matchesPattern = true;
+                                        }
+                                        
+                                        if (matchesPattern) {
+                                            
+                                            logFile << std::endl << "Processing file: " << filename << std::endl;
+                                            logFile << "Full path: " << fullPath << std::endl;
+                                            totalFilesProcessed++;
 
-                                        // Buscar el signo =
-                                        size_t equalPos = line.find('=');
-                                        if (equalPos != std::string::npos) {
-                                            std::string key = Trim(line.substr(0, equalPos));
-                                            std::string value = Trim(line.substr(equalPos + 1));
+                                            std::ifstream iniFile(entry.path());
+                                            if (!iniFile.is_open()) {
+                                                logFile << "  ERROR: Could not open file!" << std::endl;
+                                                continue;
+                                            }
 
-                                            if (validKeys.count(key) && !value.empty()) {
-                                                ParsedRule rule = ParseRuleLine(key, value);
+                                            std::string line;
+                                            int rulesInFile = 0;
+                                            int rulesAppliedInFile = 0;
+                                            int rulesReplacedInFile = 0;
+                                            int rulesSkippedInFile = 0;
 
-                                                if (!rule.animationKey.empty() && !rule.soundFile.empty()) {
-                                                    rulesInFile++;
-                                                    totalRulesProcessed++;
+                                            while (std::getline(iniFile, line)) {
+                                                std::string originalLine = line;
 
-                                                    auto& data = processedData[key];
-                                                    SetPresetResult result = data.setPreset(
-                                                        rule.animationKey, rule.soundFile, rule.playback);
+                                                size_t commentPos = line.find(';');
+                                                if (commentPos != std::string::npos) {
+                                                    line = line.substr(0, commentPos);
+                                                }
 
-                                                    switch (result) {
-                                                        case SetPresetResult::Added:
-                                                            rulesAppliedInFile++;
-                                                            totalRulesApplied++;
-                                                            logFile << "  Added: " << key
-                                                                    << " -> AnimationKey: " << rule.animationKey
-                                                                    << " -> Sound: " << rule.soundFile
-                                                                    << " -> Playback: " << rule.playback << std::endl;
-                                                            break;
-                                                        case SetPresetResult::Replaced:
-                                                            rulesReplacedInFile++;
-                                                            totalRulesReplaced++;
-                                                            logFile << "  Replaced: " << key
-                                                                    << " -> AnimationKey: " << rule.animationKey
-                                                                    << " -> Sound: " << rule.soundFile
-                                                                    << " -> Playback: " << rule.playback << std::endl;
-                                                            break;
-                                                        case SetPresetResult::NoChange:
-                                                            rulesSkippedInFile++;
-                                                            totalRulesSkipped++;
-                                                            logFile << "  Skipped (no change): " << key
-                                                                    << " -> AnimationKey: " << rule.animationKey
-                                                                    << " -> Sound: " << rule.soundFile
-                                                                    << " -> Playback: " << rule.playback << std::endl;
-                                                            break;
+                                                commentPos = line.find('#');
+                                                if (commentPos != std::string::npos) {
+                                                    line = line.substr(0, commentPos);
+                                                }
+
+                                                size_t equalPos = line.find('=');
+                                                if (equalPos != std::string::npos) {
+                                                    std::string key = Trim(line.substr(0, equalPos));
+                                                    std::string value = Trim(line.substr(equalPos + 1));
+
+                                                    if (validKeys.count(key) && !value.empty()) {
+                                                        ParsedRule rule = ParseRuleLine(key, value);
+
+                                                        if (!rule.animationKey.empty() && !rule.soundFile.empty()) {
+                                                            rulesInFile++;
+                                                            totalRulesProcessed++;
+
+                                                            auto& data = processedData[key];
+                                                            SetPresetResult result = data.setPreset(
+                                                                rule.animationKey, rule.soundFile, rule.playback);
+
+                                                            switch (result) {
+                                                                case SetPresetResult::Added:
+                                                                    rulesAppliedInFile++;
+                                                                    totalRulesApplied++;
+                                                                    logFile << "  Added: " << key
+                                                                            << " -> AnimationKey: " << rule.animationKey
+                                                                            << " -> Sound: " << rule.soundFile
+                                                                            << " -> Playback: " << rule.playback << std::endl;
+                                                                    break;
+                                                                case SetPresetResult::Replaced:
+                                                                    rulesReplacedInFile++;
+                                                                    totalRulesReplaced++;
+                                                                    logFile << "  Replaced: " << key
+                                                                            << " -> AnimationKey: " << rule.animationKey
+                                                                            << " -> Sound: " << rule.soundFile
+                                                                            << " -> Playback: " << rule.playback << std::endl;
+                                                                    break;
+                                                                case SetPresetResult::NoChange:
+                                                                    rulesSkippedInFile++;
+                                                                    totalRulesSkipped++;
+                                                                    logFile << "  Skipped (no change): " << key
+                                                                            << " -> AnimationKey: " << rule.animationKey
+                                                                            << " -> Sound: " << rule.soundFile
+                                                                            << " -> Playback: " << rule.playback << std::endl;
+                                                                    break;
+                                                            }
+
+                                                            UpdateIniRuleCount(entry.path(), originalLine, -1, logFile);
+                                                        }
                                                     }
-
-                                                    // OSoundtracks: UpdateIniRuleCount no es necesario
-                                                    UpdateIniRuleCount(entry.path(), originalLine, -1, logFile);
                                                 }
                                             }
+
+                                            iniFile.close();
+
+                                            logFile << "  Rules in file: " << rulesInFile << " | Added: " << rulesAppliedInFile
+                                                    << " | Replaced: " << rulesReplacedInFile
+                                                    << " | Skipped: " << rulesSkippedInFile << std::endl;
                                         }
+                                    } catch (...) {
+                                        continue;
                                     }
-
-                                    iniFile.close();
-
-                                    logFile << "  Rules in file: " << rulesInFile << " | Added: " << rulesAppliedInFile
-                                            << " | Replaced: " << rulesReplacedInFile
-                                            << " | Skipped: " << rulesSkippedInFile << std::endl;
                                 }
+                            } catch (const std::exception& e) {
+                                logFile << "ERROR scanning path " << searchPath.string() << ": " << e.what() << std::endl;
+                            } catch (...) {
+                                logFile << "ERROR scanning path (unknown error)" << std::endl;
                             }
                         }
                     } catch (const std::exception& e) {
-                        logFile << "ERROR scanning directory: " << e.what() << std::endl;
+                        logFile << "CRITICAL ERROR in INI scanning: " << e.what() << std::endl;
+                    } catch (...) {
+                        logFile << "CRITICAL ERROR in INI scanning: Unknown error" << std::endl;
                     }
 
-                    // LIMPIEZA: Eliminar AnimationKeys que no fueron procesadas desde los INI
                     logFile << std::endl;
                     logFile << "Cleaning up AnimationKeys not present in INI files..." << std::endl;
                     logFile << "----------------------------------------------------" << std::endl;
@@ -2184,7 +2504,6 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
                         keysBeforeCleanup += data.getPluginCount();
                     }
 
-                    // Ejecutar limpieza
                     for (auto& [key, data] : processedData) {
                         data.cleanUnprocessedKeys();
                     }
@@ -2234,17 +2553,14 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
                     }
                     logFile << "====================================================" << std::endl << std::endl;
 
-                    // ACTUALIZAR JSON CONSERVADORAMENTE CON FORMATO CORRECTO Y PLAYBACK
                     logFile << "Updating JSON at: " << jsonOutputPath.string() << std::endl;
                     logFile << "Applying proper 4-space indentation format with playback support..." << std::endl;
                     logFile << "Mode: REPLACEMENT (sounds are replaced, not added)" << std::endl;
 
                     try {
-                        // Usar la función que preserva el formato original con indentación correcta
                         std::string updatedJsonContent =
                             PreserveOriginalSections(originalJsonContent, processedData, logFile);
 
-                        // Verificar si los cambios de las reglas ya están aplicados en el JSON
                         if (CheckIfChangesNeeded(originalJsonContent, processedData) || keysRemoved > 0) {
                             if (keysRemoved > 0) {
                                 logFile << "AnimationKeys were removed, JSON update required." << std::endl;
@@ -2253,13 +2569,11 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
                                        "atomic write..."
                                     << std::endl;
 
-                            // Si hay cambios, ejecutar escritura atómica
                             if (WriteJsonAtomically(jsonOutputPath, updatedJsonContent, analysisDir, logFile)) {
                                 logFile << "SUCCESS: JSON updated successfully with proper 4-space indentation "
                                            "hierarchy and playback support!"
                                         << std::endl;
 
-                                // CORRECCIÓN COMPLETA DE INDENTACIÓN
                                 logFile << std::endl;
                                 if (CorrectJsonIndentation(jsonOutputPath, analysisDir, logFile)) {
                                     logFile << "SUCCESS: JSON indentation verification and correction completed with "
@@ -2288,12 +2602,10 @@ extern "C" __declspec(dllexport) bool SKSEPlugin_Load(const SKSE::LoadInterface*
                                 }
                             }
                         } else {
-                            // Si no hay cambios, omitir escritura y pasar directamente a corrección de indentación
                             logFile << "No changes detected between INI rules and master JSON. Skipping redundant "
                                        "atomic write."
                                     << std::endl;
 
-                            // Siempre asegurar formato perfecto, incluso sin cambios
                             if (CorrectJsonIndentation(jsonOutputPath, analysisDir, logFile)) {
                                 logFile << "JSON indentation is already perfect or has been corrected." << std::endl;
                             } else {
