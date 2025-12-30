@@ -11,7 +11,7 @@ The OSoundtracks-SA-Expansion-Sounds-NG project consists of **3 separate DLL com
 
 This SKSE Mod processes INI configuration files and builds the master `OSoundtracks-SA-Expansion-Sounds-NG.json` file at game startup. It translates human-readable rules into a stable JSON format with built-in backup and corruption recovery.
 
-This is the core data processing component of the OSoundtracks system — it reads INI rules and generates the structured JSON that other components depend on.
+This is the core data processing component of the OSoundtracks system, it reads INI rules and generates the structured JSON that other components depend on.
 
 ---
 
