@@ -817,7 +817,7 @@ This version represents a comprehensive technical analysis of the entire OSoundt
 </tr>
 </table>
 
-I also want to extend my deepest gratitude to the beta testers who generously dedicated their valuable time to help me program, test, and refine the mods. Without their voluntary contributions and collaborative spirit, achieving a stable public version would not have been possible. I truly appreciate how they not only assisted me but also supported the broader modding community selflessly. I love you all, guys **Cryshy**, **djdunha**, **IAleX**, **Knuxxx**, **Lucas**, **nobody**, **shadowman2777**, and **Edsley** - your efforts have been invaluable, and I'm incredibly thankful for your dedication.
+I also want to extend my deepest gratitude to the beta testers who generously dedicated their valuable time to help me program, test, and refine the mods. Without their voluntary contributions and collaborative spirit, achieving a stable public version would not have been possible. I truly appreciate how they not only assisted me but also supported the broader modding community selflessly. I love you all, guys **Эверг**, **nobody**, **shadowman2777**, **Knuxxx**, **IAleX**, **Cryshy**, **Lucas**, **djdunha**, and **Edsley** - your efforts have been invaluable, and I'm incredibly thankful for your dedication.
 
 Special thanks to **Edsley** for providing helpful instructions and support for web-related aspects during development and testing.
 
