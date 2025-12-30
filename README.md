@@ -793,14 +793,9 @@ This version represents a comprehensive technical analysis of the entire OSoundt
 - **OSoundtracks_McmScript.psc**: Extends SKI_ConfigBase with 3 pages (Settings, Advanced MCM, About)
 - Uses local variables synchronized with INI via native calls
 
-**INI Sections Comparison (What MCM Controls vs What It Doesn't):**
-- MCM controls: BaseVolume, MenuVolume, SpecificVolume, MasterVolumeEnabled, Startup, Visible, Backup
-- MCM DOES NOT Control: EffectVolume, PositionVolume, TAGVolume, SoundMenuKeyVolume, MuteGameMusicDuringOStim, SoundMenuKey, Author
+**INI Sections Comparison (What MCM Controls):**
+- MCM controls: BaseVolume, MenuVolume, SpecificVolume, MasterVolumeEnabled, Startup, Visible, Backup, EffectVolume, PositionVolume, TAGVolume, SoundMenuKeyVolume, MuteGameMusicDuringOStim, SoundMenuKey, Author
 
-**Proposed Progressive Implementation (85% Phase 1, 60-65% Phase 2):**
-1. Add 4 volume sliders + MuteGameMusic toggle
-2. Implement 5-option SoundMenuKey selector
-3. Implement dynamic JSON author list
 
 ---
 ## Acknowledgements
