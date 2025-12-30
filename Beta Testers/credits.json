@@ -1,0 +1,128 @@
+{
+  "acknowledgments": {
+    "beta_testers_intro": "Special thanks to our dedicated beta testers who helped make this project possible:",
+    "beta_testers": [
+      {
+        "name": "Cryshy",
+        "avatar": "Cryshy.png",
+        "contribution": "Beta review, observation of future applications"
+      },
+      {
+        "name": "IAleX",
+        "avatar": "IAleX.png",
+        "contribution": "Beta review"
+      },
+      {
+        "name": "Lucas",
+        "avatar": "Lucas.png",
+        "contribution": "JSON analysis and observation of corrections in ini parameters"
+      },
+      {
+        "name": "OpheliaMoonlight",
+        "avatar": "OpheliaMoonlight.png",
+        "contribution": "Testing Unicode support, multiple betas reviewed"
+      },
+      {
+        "name": "storm12",
+        "avatar": "storm12.png",
+        "contribution": "Mod betatester in complex mod list"
+      },
+      {
+        "name": "Thalzamar",
+        "avatar": "Thalzamar.png",
+        "contribution": "Beta tester"
+      },
+      {
+        "name": "iDeadSea",
+        "avatar": "iDeadSea.png",
+        "contribution": "Beta tester for COtR and multi-language analysis"
+      },
+      {
+        "name": "AdrienMassenot",
+        "avatar": "AdrienMassenot.png",
+        "contribution": "Thanks to his observations on the HIMBO system, which led to improvements in it"
+      },
+      {
+        "name": "Edsley",
+        "avatar": "Edsley.png",
+        "contribution": "Advisor on templates and free web addons"
+      },
+      {
+        "name": "Triberzis",
+        "avatar": "Triberzis.png",
+        "contribution": "Advice/ideas for system modes and keys"
+      },
+      {
+        "name": "djdunha",
+        "avatar": "djdunha.png",
+        "contribution": "Beta tester for the GOG platform, communicated through Nexus."
+      }
+    ],
+    "additional_credits": [
+      {
+        "title": "Cryshy",
+        "content": "Beta review: UBE users who with their help I managed to better understand the world of this type of bodies. Thanks to their observations and ideas I implemented the automation system for UBE presets in the blacklist, and default application to UBE races. With this, NPCs with UBE will no longer appear skinny by default, but will be able to have UBE presets for them from the start. Thank you very much."
+      },
+      {
+        "title": "Triberzis",
+        "content": "Thanks to your observation about the use of keys, the system has been modified and implemented with a more comprehensive preset search system based on the presets installed in the player's game. Thank you very much for the idea, which has been implemented in the latest version."
+      },
+      {
+        "title": "Lucas, OpheliaMoonlight, Thalzamar, iDeadSea, AdrienMassenot",
+        "content": "I thank you for testing the betas and giving me your respective observations across your different game versions and mod organizers. Thank you very much."
+      },
+      {
+        "title": "AdrienMassenot",
+        "content": "Thanks to his cooperation with HIMBO system testing, which led to significant improvements in the male body preset distribution logic."
+      },
+      {
+        "title": "iDeadSea",
+        "content": "Thanks to his cooperation with multiple beta tests, he provided information from his Skyrim version in Cyrillic, with which it was decided that different Skyrim versions handle different default names for each NPC depending on the language in which the game is played, so it was decided to correct these and add new functions. Thank you."
+      },
+      {
+        "title": "CommonLibSSE NG",
+        "content": "Fundamental framework for developing modern SKSE plugins.",
+        "link": "https://github.com/CharmedBaryon/CommonLibSSE-NG"
+      },
+      {
+        "title": "SKSE Team",
+        "content": "For the continuous development and support of the Skyrim Script Extender.",
+        "link": "https://skse.silverlock.org/"
+      },
+      {
+        "title": "OBody NG Team",
+        "content": "For creating the base that makes this functionality possible.",
+        "link": "https://www.nexusmods.com/skyrimspecialedition/mods/77016"
+      },
+      {
+        "title": "Modding Community",
+        "content": "For the constant feedback and ideas for improvements."
+      },
+      {
+        "title": "Music Skyrim",
+        "content": "Thanks to the original authors of Skyrim for the music played directly from YouTube.",
+        "link": "https://www.youtube.com/user/SkyrimMusic"
+      },
+      {
+        "title": "Flowchart, Whiteboard and Graphics",
+        "content": "Thanks to Mermaid, Excalidraw and Graphics for being free and very useful tools for drawing and creating diagrams.",
+        "links": [
+          { "name": "Mermaid", "url": "https://mermaid.js.org/" },
+          { "name": "Excalidraw", "url": "https://excalidraw.com/" },
+          { "name": "Graphics", "url": "https://time.graphics/" }
+        ]
+      },
+      {
+        "title": "Mrowrpurr (Skyrim Scripting)",
+        "content": "Thanks to the tutorial creator Mrowrpurr, whose advice and videos on how to work with SKSE are splendid.",
+        "link": "https://www.youtube.com/@SkyrimScripting"
+      }
+    ],
+    "social_links": {
+      "github": "https://github.com/John95ac",
+      "patreon": "https://www.patreon.com/John95ac",
+      "kofi": "https://ko-fi.com/john95ac",
+      "nexus": "https://next.nexusmods.com/profile/John1995ac"
+    }
+  }
+}
