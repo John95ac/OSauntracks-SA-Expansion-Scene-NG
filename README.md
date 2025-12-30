@@ -1,6 +1,7 @@
 # 📜 OSoundtracks-SA-Expansion-Sounds-NG System Components
 
-This mod manages different sounds and music for OSTIM. It's simple to use and works like SPID called OSTR (O-Sound-tracks-Rules): just create an INI file and with a WAV file, you can add music, purring sounds for Khajiits, or anything else to OSTIM animations.❤️ Dancing with your partner is also an expression of love. ❤️
+This mod manages different sounds and music for OSTIM. It's simple to use and works like SPID called OSTR (O-Sound-tracks-Rules)
+
 The OSoundtracks-SA-Expansion-Sounds-NG project consists of **3 separate DLL components** that work together to provide a complete soundtrack management system for Skyrim Special Edition:
 ---
 
