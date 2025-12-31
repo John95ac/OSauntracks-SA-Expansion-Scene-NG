@@ -805,7 +805,7 @@ I want to start by thanking **[mrowrpurr](https://www.youtube.com/@SkyrimScripti
 
 I never thought I'd say this, but thank you C++ for existing. I had to create a simulation of how the mod would work in Python first and then transfer the logic to C++, but without this language, it would have been impossible.
 
-I also want to thank the [BASS Library](https://www.un4seen.com/) team for providing such a robust and reliable audio solution. The transition from the PS1-style audio system to BASS completely transformed the OSoundtracks project, eliminating lag issues and enabling smooth, multi-channel audio playback with real-time volume control. BASS is free for non-commercial use, and its stability made this evolution possible.
+I also want to thank the [BASS Library](https://www.un4seen.com/) team for providing such a robust and reliable audio solution. The transition from the PS1-style audio system to BASS completely transformed the OSoundtracks project, eliminating lag issues and enabling smooth, multi-channel audio playback with real-time volume control. BASS is free for non-commercial use, and its stability made this evolution possible. For more information about the license, see [BASS License](OSoundtracks-SA-Expansion-Sounds-NG-Sound-Player/DJ_library/bass.txt).
 
 ### Beta Testers
 
