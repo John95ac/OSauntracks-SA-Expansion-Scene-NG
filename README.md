@@ -797,14 +797,21 @@ This version represents a comprehensive technical analysis of the entire OSoundt
 **INI Sections Comparison (What MCM Controls):**
 - MCM controls: BaseVolume, MenuVolume, SpecificVolume, MasterVolumeEnabled, Startup, Visible, Backup, EffectVolume, PositionVolume, TAGVolume, SoundMenuKeyVolume, MuteGameMusicDuringOStim, SoundMenuKey, Author
 
-
 ---
+
 ## Acknowledgements
+
+I want to start by thanking **[mrowrpurr](https://www.youtube.com/@SkyrimScripting)** for their wonderful SKSE tutorials, which have allowed me to learn more about creating mods without using common tools, without scripts or plugins. It took me about 8 months to understand how they work correctly and to be able to apply my projects completely. It's really incredible work, it's an amazing series of videos and tutorials. To understand them, you have to watch them all, since almost all of them complement each other.
+
+I never thought I'd say this, but thank you C++ for existing. I had to create a simulation of how the mod would work in Python first and then transfer the logic to C++, but without this language, it would have been impossible.
+
+I also want to thank the [BASS Library](https://www.un4seen.com/) team for providing such a robust and reliable audio solution. The transition from the PS1-style audio system to BASS completely transformed the OSoundtracks project, eliminating lag issues and enabling smooth, multi-channel audio playback with real-time volume control. BASS is free for non-commercial use, and its stability made this evolution possible.
 
 ### Beta Testers
 
 <table>
 <tr>
+<td><img src="Beta Testers/Iguano.png" width="100" height="100" alt="Iguano"></td>
 <td><img src="Beta Testers/Эверг.png" width="100" height="100" alt="Эверг"></td>
 <td><img src="Beta Testers/nobody.png" width="100" height="100" alt="nobody"></td>
 <td><img src="Beta Testers/shadowman2777.png" width="100" height="100" alt="shadowman2777"></td>
@@ -817,7 +824,9 @@ This version represents a comprehensive technical analysis of the entire OSoundt
 </tr>
 </table>
 
-I also want to extend my deepest gratitude to the beta testers who generously dedicated their valuable time to help me program, test, and refine the mods. Without their voluntary contributions and collaborative spirit, achieving a stable public version would not have been possible. I truly appreciate how they not only assisted me but also supported the broader modding community selflessly. I love you all, guys **Эверг**, **nobody**, **shadowman2777**, **Knuxxx**, **IAleX**, **Cryshy**, **Lucas**, **djdunha**, and **Edsley** - your efforts have been invaluable, and I'm incredibly thankful for your dedication.
+I also want to extend my deepest gratitude to the beta testers who generously dedicated their valuable time to help me program, test, and refine the mods. Without their voluntary contributions and collaborative spirit, achieving a stable public version would not have been possible. I truly appreciate how they not only assisted me but also supported the broader modding community selflessly. I love you all, guys **Iguano**, **Эверг**, **nobody**, **shadowman2777**, **Knuxxx**, **IAleX**, **Cryshy**, **Lucas**, **djdunha**, and **Edsley** - your efforts have been invaluable, and I'm incredibly thankful for your dedication.
+
+I want to thank my trusted beta tester **Iguano**, who took the time to test these mods before anyone else, since I just happened to program these mods to publish this weekend and he was the only one who responded to the call. Thank you very much.
 
 Special thanks to **Edsley** for providing helpful instructions and support for web-related aspects during development and testing.
 
@@ -830,6 +839,8 @@ Also thank you to **shadowman2777** for allowing one of your music mods to be po
 Special thanks to **Эверг** for being the only person who worked directly with me during the testing phase. Thanks to his system in another language and his constant collaboration via Discord, it was possible to detect and solve the multilingual compatibility issues, leading to the creation of the new Dual-Path system and UTF-8 BOM support.
 
 Special thanks to the SKSE community and CommonLibSSE developers for the foundation. This plugin is based on SKSE templates and my custom parsing logic for INI and JSON. Thanks for the tools that make modding possible.
+
+And to you, the people who enjoy my mods, ports, also to my Patreon supporters and people who donate to me, thank you very much. These donations will be used for more mods and a robot connected to Skyrim. Just wait until next year.
 
 ---
 
