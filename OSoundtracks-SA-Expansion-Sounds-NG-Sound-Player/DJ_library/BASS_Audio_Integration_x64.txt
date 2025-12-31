@@ -1,0 +1,45 @@
+BASS Audio Library Integration (x64)
+
+This project now uses the BASS audio library (version 2.4) instead of PowerShell scripts for audio playback. This change was made for several important reasons:
+
+Why BASS instead of PowerShell:
+
+1. Performance and Efficiency:
+   - Direct C/C++ API calls eliminate PowerShell process overhead
+   - No script generation or interpretation required
+   - Lower memory footprint and faster initialization
+   - Reduced CPU usage during audio playback
+
+2. Reliability:
+   - Native integration with the SKSE plugin eliminates external dependencies
+   - No script execution permission issues
+   - No Windows PowerShell execution policy restrictions
+   - Stable and predictable behavior
+
+3. Licensing:
+   - BASS is free for non-commercial use
+   - Royalty-free distribution allowed
+   - No licensing fees for personal projects
+   - Open and permissive license terms
+
+4. Technical Advantages:
+   - Comprehensive audio format support (MP3, WAV, OGG, FLAC, etc.)
+   - Real-time volume control and effects
+   - Stream-based playback for large files
+   - Hardware acceleration support
+   - Cross-platform compatibility (Windows, Linux, macOS, mobile)
+
+5. Code Quality:
+   - Cleaner and more maintainable code structure
+   - Direct access to low-level audio functions
+   - Better error handling and debugging capabilities
+   - Professional-grade audio processing
+
+BASS Library Details:
+- Version: 2.4
+- Architecture: x64
+- Files: bass.dll, bass.lib, bass.h
+- License: Free for non-commercial use
+- Website: https://www.un4seen.com/bass/
+
+This migration represents a significant improvement in audio playback reliability, performance, and code maintainability for the OSoundtracks-SA-Expansion-Sounds-NG project.
