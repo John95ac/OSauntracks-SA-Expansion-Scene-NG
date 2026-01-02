@@ -4164,7 +4164,7 @@ void ProcessOStimLog() {
         std::string line;
 
         while (std::getline(ostimLog, line)) {
-            if (line.find("[warning]") != std::string::npos) {
+            if (line.find("[warning]") != std::string::npos || line.find("[W]") != std::string::npos) {
                 continue;
             }
 
@@ -4183,6 +4183,14 @@ void ProcessOStimLog() {
             } else if (line.find("[ThreadManager.cpp:174] trying to stop thread") != std::string::npos) {
                 isThreadStop = true;
                 WriteToSoundPlayerLog("DETECTED: OStim trying to stop thread", __LINE__);
+            } else if (line.find("[I]") != std::string::npos &&
+                       line.find("closing thread") != std::string::npos) {
+                isThreadStop = true;
+                WriteToSoundPlayerLog("DETECTED: OStim thread closing (non-official format)", __LINE__);
+            } else if (line.find("[I]") != std::string::npos &&
+                       line.find("trying to stop thread") != std::string::npos) {
+                isThreadStop = true;
+                WriteToSoundPlayerLog("DETECTED: OStim trying to stop thread (non-official format)", __LINE__);
             }
 
             if (isThreadStop) {
@@ -4209,6 +4217,28 @@ void ProcessOStimLog() {
                 }
             } else if (line.find("[info]") != std::string::npos &&
                        line.find("[OStimMenu.h:48] UI_TransitionRequest") != std::string::npos) {
+                size_t lastOpenBrace = line.rfind('{');
+                size_t lastCloseBrace = line.rfind('}');
+
+                if (lastOpenBrace != std::string::npos && lastCloseBrace != std::string::npos &&
+                    lastCloseBrace > lastOpenBrace) {
+                    animationName = line.substr(lastOpenBrace + 1, lastCloseBrace - lastOpenBrace - 1);
+                    if (!animationName.empty()) {
+                        isAnimationLine = true;
+                    }
+                }
+            } else if (line.find("[I]") != std::string::npos &&
+                       line.find("thread 0 changed to node") != std::string::npos) {
+                size_t nodePos = line.find("changed to node ");
+                if (nodePos != std::string::npos) {
+                    size_t startPos = nodePos + 16;
+                    if (startPos < line.length()) {
+                        animationName = line.substr(startPos);
+                        isAnimationLine = true;
+                    }
+                }
+            } else if (line.find("[I]") != std::string::npos &&
+                       line.find("UI_TransitionRequest") != std::string::npos) {
                 size_t lastOpenBrace = line.rfind('{');
                 size_t lastCloseBrace = line.rfind('}');
 
@@ -5048,7 +5078,7 @@ void InitializePlugin() {
 
         WriteToSoundPlayerLog("OSoundtracks Plugin with BASS Audio Library, DUAL-PATH and Wabbajack/MO2 Support - Starting...", __LINE__);
         WriteToSoundPlayerLog("========================================", __LINE__);
-        WriteToSoundPlayerLog("OSoundtracks Plugin - v16.3.0 BASS", __LINE__);
+        WriteToSoundPlayerLog("OSoundtracks Plugin - v16.3.1 BASS", __LINE__);
         WriteToSoundPlayerLog("Started: " + GetCurrentTimeString(), __LINE__);
         WriteToSoundPlayerLog("========================================", __LINE__);
         WriteToSoundPlayerLog("Documents: " + g_documentsPath, __LINE__);
@@ -5065,7 +5095,7 @@ void InitializePlugin() {
         WriteToSoundPlayerLog("NEW: Automatic INI backup to OSoundtracks_MCM_Backup", __LINE__);
 
         WriteToActionsLog("========================================", __LINE__);
-        WriteToActionsLog("OSoundtracks Actions Monitor - v16.3.0 BASS", __LINE__);
+        WriteToActionsLog("OSoundtracks Actions Monitor - v16.3.1 BASS", __LINE__);
         WriteToActionsLog("Started: " + GetCurrentTimeString(), __LINE__);
         WriteToActionsLog("========================================", __LINE__);
         WriteToActionsLog("Monitoring game events: Menu.", __LINE__);
@@ -5224,7 +5254,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
     SKSE::Init(a_skse);
     SetupLog();
 
-    logger::info("OSoundtracks Plugin v16.3.0 BASS - Starting...");
+    logger::info("OSoundtracks Plugin v16.3.1 BASS - Starting...");
 
     InitializePlugin();
 
@@ -5237,7 +5267,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
 
 constinit auto SKSEPlugin_Version = []() {
     SKSE::PluginVersionData v;
-    v.PluginVersion({16, 3, 0});
+    v.PluginVersion({16, 3, 1});
     v.PluginName("OSoundtracks OStim Monitor");
     v.AuthorName("John95AC");
     v.UsesAddressLibrary();
