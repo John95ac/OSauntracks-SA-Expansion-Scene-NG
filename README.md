@@ -15,7 +15,7 @@ This is the core data processing component of the OSoundtracks system, it reads 
 
 ---
 
-## Component 2: OSoundtracks-SA-Expansion-Sounds-NG - Sound-Player.dll (v16.3.0)
+## Component 2: OSoundtracks-SA-Expansion-Sounds-NG - Sound-Player.dll (v16.3.1)
 
 **Audio Playback Engine** - BASS-based sound system
 
@@ -29,6 +29,7 @@ Features:
 - Loop and single-playback modes
 - Volume control via INI settings
 - Mute game music during OStim functionality
+- **Dual-Format OStim.log Support** - Compatible with both official and non-official OStim builds
 
 ---
 
@@ -530,7 +531,7 @@ This Mod SKSE ships a stability-first pipeline for real mod environments:
 
 ## Component 2: Audio Playback Engine (OSoundtracks-SA-Expansion-Sounds-NG-Sound-Player.dll)
 
-**Current Version:** v16.3.0
+**Current Version:** v16.3.1
 
 This component monitors OStim.log for animation transitions and plays sounds using BASS Library. It is a robust replacement for the previous PS1-style audio system that suffered from lag issues. The BASS implementation provides smooth, multi-channel audio playback with real-time volume control and loop management.
 
@@ -654,6 +655,57 @@ Critical pause/resume bug fixes and complete multi-layer implementation for Soun
 **Author Preview**: Skips playback when game is paused to maintain sync.
 
 Example: Animation "kissAllHug-sleep" triggers "kiss" layer and "sleep" layer (with its own sub-layers) simultaneously.
+
+---
+
+**Version 16.3.1: Dual-Format OStim.log Support**
+
+Added comprehensive support for both official and non-official OStim builds by implementing dual-format detection for OStim.log parsing.
+
+**Dual-Format Detection System:**
+- **Official Format Priority**: Always attempts detection with official format first (`[info]` + file references)
+- **Non-Official Format Fallback**: If official format fails, attempts alternative format (`[I]` without file references)
+- **Complete Coverage**: Supports animation detection, scene closure detection, and warning filtering for both formats
+
+**Supported Formats:**
+
+**Official OStim.log Format (majority of users):**
+```
+[info] [Thread.cpp:195] thread 0 changed to node AnimationName
+[info] [OStimMenu.h:48] UI_TransitionRequest {}, {AnimationName}
+[info] [Thread.cpp:634] closing thread
+[info] [ThreadManager.cpp:174] trying to stop thread
+[warning] warning message
+```
+
+**Non-Official OStim.log Format (niche user group):**
+```
+[9772 ] [I] thread 0 changed to node AnimationName
+[46108] [I] UI_TransitionRequest {}, {AnimationName}
+[29848] [I] closing thread 0
+[29848] [I] trying to stop thread 0
+[W] warning message
+```
+
+**Detection Priority Logic:**
+1. First attempts: `[info]` + `[Thread.cpp:195] thread 0 changed to node`
+2. If fails: `[info]` + `[OStimMenu.h:48] UI_TransitionRequest`
+3. If fails: `[I]` + `thread 0 changed to node` (non-official)
+4. If fails: `[I]` + `UI_TransitionRequest` (non-official)
+
+**Key Improvements:**
+- **Zero Impact**: No performance impact for official OStim users
+- **Backward Compatible**: Maintains full compatibility with existing official format
+- **Enhanced Coverage**: Extends plugin functionality to non-official OStim builds
+- **Smart Detection**: Automatic format detection without user configuration
+
+**Technical Implementation:**
+- Added 4 new detection conditions for non-official format
+- Enhanced scene closure detection for both formats
+- Updated warning filtering to support both `[warning]` and `[W]` prefixes
+- Maintained priority-based detection to ensure official format is always preferred
+
+This update significantly expands plugin compatibility while maintaining optimal performance for the majority of users running official OStim builds.
 
 ---
 
@@ -817,14 +869,17 @@ I also want to thank the [BASS Library](https://www.un4seen.com/) team for provi
 <td><img src="Beta Testers/shadowman2777.png" width="100" height="100" alt="shadowman2777"></td>
 <td><img src="Beta Testers/Knuxxx.png" width="100" height="100" alt="Knuxxx"></td>
 <td><img src="Beta Testers/IAleX.png" width="100" height="100" alt="IAleX"></td>
+</tr>
+<tr>
 <td><img src="Beta Testers/Cryshy.png" width="100" height="100" alt="Cryshy"></td>
 <td><img src="Beta Testers/Lucas.png" width="100" height="100" alt="Lucas"></td>
 <td><img src="Beta Testers/djdunha.png" width="100" height="100" alt="djdunha"></td>
 <td><img src="Beta Testers/Edsley.png" width="100" height="100" alt="Edsley"></td>
+<td><img src="Beta Testers/Paralyzer.png" width="100" height="100" alt="Paralyzer"></td>
 </tr>
 </table>
 
-I also want to extend my deepest gratitude to the beta testers who generously dedicated their valuable time to help me program, test, and refine the mods. Without their voluntary contributions and collaborative spirit, achieving a stable public version would not have been possible. I truly appreciate how they not only assisted me but also supported the broader modding community selflessly. I love you all, guys **Iguano**, **Эверг**, **nobody**, **shadowman2777**, **Knuxxx**, **IAleX**, **Cryshy**, **Lucas**, **djdunha**, and **Edsley** - your efforts have been invaluable, and I'm incredibly thankful for your dedication.
+I also want to extend my deepest gratitude to the beta testers who generously dedicated their valuable time to help me program, test, and refine the mods. Without their voluntary contributions and collaborative spirit, achieving a stable public version would not have been possible. I truly appreciate how they not only assisted me but also supported the broader modding community selflessly. I love you all, guys **Iguano**, **Эверг**, **nobody**, **shadowman2777**, **Knuxxx**, **IAleX**, **Cryshy**, **Lucas**, **djdunha**, **Edsley**, and **Paralyzer** - your efforts have been invaluable, and I'm incredibly thankful for your dedication.
 
 I want to thank my trusted beta tester **Iguano**, who took the time to test these mods before anyone else, since I just happened to program these mods to publish this weekend and he was the only one who responded to the call. Thank you very much.
 
@@ -837,6 +892,8 @@ Special thanks to **Cryshy** for identifying a critical issue with handling larg
 Also thank you to **shadowman2777** for allowing one of your music mods to be ported to OSTIM and to work thanks to this music system. Thank you very much for your hard work.
 
 Special thanks to **Эверг** for being the only person who worked directly with me during the testing phase. Thanks to his system in another language and his constant collaboration via Discord, it was possible to detect and solve the multilingual compatibility issues, leading to the creation of the new Dual-Path system and UTF-8 BOM support.
+
+Special thanks to **Paralyzer** for sending me the logs of his version of Ostim, which is very uncommon. The Ostim logs show different codes that I had never seen before. Thanks to that, I managed to create the Dual-Format OStim.log Support system, which allows supporting unofficial versions with uncommon translation of Ostim.
 
 Special thanks to the SKSE community and CommonLibSSE developers for the foundation. This plugin is based on SKSE templates and my custom parsing logic for INI and JSON. Thanks for the tools that make modding possible.
 
