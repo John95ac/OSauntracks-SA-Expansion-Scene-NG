@@ -134,7 +134,7 @@ Event OnPageReset(String page)
         
         SetCursorPosition(0)
         AddHeaderOption("Audio Settings")
-        AddTextOption("Mute Skyrim music during OStim scenes", "", OPTION_FLAG_DISABLED)
+        AddTextOption("Mute Skyrim music during OStim scenes - Experimental", "", OPTION_FLAG_DISABLED)
         toggleMuteGameMusic = AddToggleOption("Enable Mute Game Music System", currentMuteGameMusicEnabled)
         
         Int methodFlags = OPTION_FLAG_NONE
@@ -393,21 +393,42 @@ Event OnOptionSelect(Int option)
             OSoundtracks_NativeScript.ActivateStandaloneMode()
         endIf
     elseIf option == buttonNexus
-        OSoundtracks_NativeScript.OpenURL("https://www.nexusmods.com/profile/John1995ac")
+        Bool result = ShowMessage("Open John95ac Nexus Mods profile?", true)
+        if result
+            OSoundtracks_NativeScript.OpenURL("https://www.nexusmods.com/profile/John1995ac")
+        endIf
     elseIf option == buttonPatreon
-        OSoundtracks_NativeScript.OpenURL("https://www.patreon.com/c/John95ac")
+        Bool result = ShowMessage("Open John95ac Patreon page?", true)
+        if result
+            OSoundtracks_NativeScript.OpenURL("https://www.patreon.com/c/John95ac")
+        endIf
     elseIf option == buttonKoFi
-        OSoundtracks_NativeScript.OpenURL("https://ko-fi.com/john95ac")
+        Bool result = ShowMessage("Open John95ac Ko-Fi page?", true)
+        if result
+            OSoundtracks_NativeScript.OpenURL("https://ko-fi.com/john95ac")
+        endIf
     elseIf option == buttonWebAdvances
-        OSoundtracks_NativeScript.OpenURL("https://john95ac.github.io/website-documents-John95AC/NEWS_MCM/index.html")
+        Bool result = ShowMessage("Open John95ac website with advances?", true)
+        if result
+            OSoundtracks_NativeScript.OpenURL("https://john95ac.github.io/website-documents-John95AC/NEWS_MCM/index.html")
+        endIf
     elseIf option == buttonOstrDocuments
         Bool result = ShowMessage("OSTR (O-Sound-tracks-Rules) documents are currently under construction. Check back later for updates!", true)
     elseIf option == buttonJaxonzMCM
-        OSoundtracks_NativeScript.OpenURL("https://www.nexusmods.com/skyrimspecialedition/mods/36801")
+        Bool result = ShowMessage("Open Jaxonz MCM Kicker SE mod page?", true)
+        if result
+            OSoundtracks_NativeScript.OpenURL("https://www.nexusmods.com/skyrimspecialedition/mods/36801")
+        endIf
     elseIf option == buttonMenuMaid
-        OSoundtracks_NativeScript.OpenURL("https://www.nexusmods.com/skyrimspecialedition/mods/67556")
+        Bool result = ShowMessage("Open Menu Maid 2 mod page?", true)
+        if result
+            OSoundtracks_NativeScript.OpenURL("https://www.nexusmods.com/skyrimspecialedition/mods/67556")
+        endIf
     elseIf option == buttonConsoleUtilSSE
-        OSoundtracks_NativeScript.OpenURL("https://www.nexusmods.com/skyrimspecialedition/mods/24858")
+        Bool result = ShowMessage("Open ConsoleUtilSSE mod page?", true)
+        if result
+            OSoundtracks_NativeScript.OpenURL("https://www.nexusmods.com/skyrimspecialedition/mods/24858")
+        endIf
     endIf
 EndEvent
 
@@ -435,15 +456,15 @@ Event OnOptionHighlight(Int option)
     elseIf option == toggleBackup
         SetInfoText("Keep a backup copy of the JSON configuration file. Preferably keep this active.")
     elseIf option == toggleMuteGameMusic
-        SetInfoText("Mute Skyrim's built-in music during OStim scenes to avoid audio conflicts. This was very complicated to integrate because there is no documentation to mute the game's settings in any of its versions without using Papyrus scripts, so I tried multiple methods to affect a game music mute in a clear and lag-free way.")
+        SetInfoText("Mute Skyrim's built-in music during OStim scenes to avoid audio conflicts. This was very complicated to integrate because there is no documentation to mute the game's settings in any of its versions without using Papyrus scripts, so I tried multiple methods to affect a game music mute in a clear and lag-free way. - IN CASE IT DOES NOT WORK, IT IS RECOMMENDED TO DEACTIVATE THIS FUNCTION AND LOWER THE GAME'S MUSIC VOLUME ON YOUR OWN.")
     elseIf option == toggleMuteLegacy
-        SetInfoText("Legacy mute method using code 0010486c, which I discovered is one of the few that, via commands - addmusic 0010486c and - removemusic 0010486c. These commands are applied in seconds when starting a scene and when exiting a scene; this makes the game switch music tracks, but I immediately apply a mute to all tracks, and after applying removemusic, I clean the remaining music cache smoothly without third-party intervention. It's the first method I tried on my PC and it works, with the drawback of hearing a bit of other music, about 75ms of another music track. I consider it an old version and don't use it in my playthrough.")
+        SetInfoText("Legacy mute method using code 0010486c, which I discovered is one of the few that, via commands - addmusic 0010486c and - removemusic 0010486c. These commands are applied in seconds when starting a scene and when exiting a scene, this makes the game switch music tracks, but I immediately apply a mute to all tracks, and after applying removemusic, I clean the remaining music cache smoothly without third-party intervention. It's the first method I tried on my PC and it works, with the drawback of hearing a bit of other music, about 75ms of another music track. I consider it an old version and don't use it in my playthrough.")
     elseIf option == toggleMuteOptionA
-        SetInfoText("Much appreciated the legacy, but I use the command MUSCombatBoss which in my playthrough results in having no sound track: - addmusic MUSCombatBoss and - removemusic MUSCombatBoss. I perform the same sequencing and apply cache cleaning. This took me a lot of research time, I documented everything on GITHUB. It's the method I currently use, at least it works for me without filtered sounds.")
+        SetInfoText("Very similar to the legacy, but I use the command MUSCombatBoss which in my playthrough results in having no sound track: - addmusic MUSCombatBoss and - removemusic MUSCombatBoss. I perform the same sequencing and apply cache cleaning. This took me a lot of research time, I documented everything on GITHUB. It's the method I currently use, at least it works for me without filtered sounds. I will improve it over time.")
     elseIf option == toggleMuteOptionB
-        SetInfoText("MUSSpecialDeath - Method similar to the previous one, but uses another uncommon audio track, and it does filter strange sounds, but it's functional; I don't recommend it.")
+        SetInfoText("MUSSpecialDeath - Method similar to the previous one, but uses another uncommon audio track, and it does filter strange sounds, but it's functional, I don't recommend it.")
     elseIf option == menuSoundMenuKeyMode
-        SetInfoText("Select the playback method for background music. You can mangle/turn off the background music. You can choose all the music from all the lists in order or random, as you can also choose your favorite list creator and listen to their music in order or random.")
+        SetInfoText("Select the playback method for background music. You can turn off the background music. You can choose all the music from all the lists in order or random, as you can also choose your favorite list creator and listen to their music in order or random.")
     elseIf option == menuAuthor
         SetInfoText("Selection of the list creator you prefer. Once you choose one, you'll listen to 7 seconds of one of their songs to see if you like it or not. Over time I'll create more lists, but it's very simple, it's the same way I create SPID but for music.")
     elseIf option == buttonStandaloneMode
@@ -451,15 +472,15 @@ Event OnOptionHighlight(Int option)
     elseIf option == buttonNexus
         SetInfoText("Open John95ac Nexus Mods page so you can see his mods in your web browser. I have many mods there and more all over, there are music packs and effects managed by the sound mod. Once pressed, it takes a few seconds to open.")
     elseIf option == buttonPatreon
-        SetInfoText("With this button, you can go to my Patreon where I publish mod advancements, beta links via Drive, host meetups, tutorials. Many thanks to everyone who sponsors me; each day I'm closer to finishing the first prototype of a robot connected to Skyrim, it is one of my goals. I hope to have the first recorded progress in video by mid-2026. Many thanks to everyone.")
+        SetInfoText("With this button, you can go to my Patreon where I publish mod advancements, beta links via Drive, host meetups, tutorials. Many thanks to everyone who sponsors me, each day I'm closer to finishing the first prototype of a robot connected to Skyrim, it is one of my goals. I hope to have the first recorded progress in video by mid-2026. Many thanks to everyone.")
     elseIf option == buttonKoFi
-        SetInfoText("My Ko-Fi, many thanks to everyone who supports me for my mods, translations, and animations. Many thanks whenever you donate; I drink coffee, it helps a lot to continue with the mods and overcome the technical challenges I face. Many thanks to everyone.")
+        SetInfoText("My Ko-Fi, many thanks to everyone who supports me for my mods, translations, and animations. Many thanks whenever you donate, I drink coffee, it helps a lot to continue with the mods and overcome the technical challenges I face. Many thanks to everyone.")
     elseIf option == buttonWebAdvances
         SetInfoText("It's my website where I publish my progress, lists of my mods on different platforms, also post acknowledgments, my beta testers, personal thoughts, publish what I will do in a month or a week so they know what I'm working on, photos, tips, a bit of everything. It's still a WIP but I'm gradually building it and improving it.")
     elseIf option == buttonOstrDocuments
         SetInfoText("OSTR (O-Sound-tracks-Rules) documentation will be the same as the one I created for OBody PDA, but for Ostim music because the .ini rules can be generated with a simple generator. It will take me a few weeks since it's January and I'm on vacation and I have to go out with my family from time to time, but I'll be ready soon.")
     elseIf option == buttonJaxonzMCM
-        SetInfoText("Jaxonz MCM Kicker SE: this mod is great for updating the MCM mod list when you install a mod that has an MCM but it doesn't appear in the list. It could be due to script lag since the MCM system is tied to Skyrim's engine, or from exceeding the MCM limit of more than 120. This mod helps in the first case; it makes the MCM list update in each playthrough, forcing stuck MCMs to appear. It does what it can but no miracles. Remember to keep your game with optimized Papyrus scripts; many MCM issues are due to poorly optimized mods or the game itself.")
+        SetInfoText("Jaxonz MCM Kicker SE: this mod is great for updating the MCM mod list when you install a mod that has an MCM but it doesn't appear in the list. It could be due to script lag since the MCM system is tied to Skyrim's engine, or from exceeding the MCM limit of more than 120. This mod helps in the first case, it makes the MCM list update in each playthrough, forcing stuck MCMs to appear. It does what it can but no miracles. Remember to keep your game with optimized Papyrus scripts, many MCM issues are due to poorly optimized mods or the game itself.")
     elseIf option == buttonMenuMaid
         SetInfoText("Menu Maid 2 - MCM manager, my favorite. This mod allows surpassing the theoretical limit of 120 MCM to a number I haven't reached yet, but I have many mods and easily exceed 200 MCM. With this mod I can configure and customize the MCM, also in the rare case that you uninstall a mod with MCM and it causes a CTD when entering the playthrough without that mod. My advice is to deactivate the Menu Maid mod, enter the playthrough, save, then exit, activate Menu Maid again, and re-enter, and done, the problem is solved.")
     elseIf option == buttonConsoleUtilSSE
