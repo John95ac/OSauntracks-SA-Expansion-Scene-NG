@@ -198,8 +198,13 @@ static fs::path g_backupDirectory;
 static std::atomic<bool> g_backupUpdateEnabled(false);
 
 static std::atomic<bool> g_muteGameMusicDuringOStim(true);
+static std::string g_muteMusicCode = "0010486c";
 static float g_originalMusicVolume = 1.0f;
 static bool g_gameMusicMuted = false;
+static std::atomic<bool> g_muteGameMusicDuringOStim_snapshot(true);
+
+static std::unordered_map<RE::BGSMusicType*, RE::BSTArray<RE::BSIMusicTrack*>> g_originalMusicTracks;
+static bool g_musicTracksCleared = false;
 
 // ========================================
 // BASS Audio Library - Global Variables
@@ -281,6 +286,8 @@ void StartSoundMenuKeyMonitor();
 void StopSoundMenuKeyMonitor();
 void MuteGameMusic();
 void RestoreGameMusic();
+void ForceAudioRefresh();
+void ExecuteConsoleCommand(const std::string& command);
 std::string ToLowerCase(const std::string& str);
 void PlayAuthorPreview(const std::string& authorName);
 void StartPreviewTimer(const std::string& authorName, const std::string& songName);
@@ -1538,8 +1545,25 @@ void ProcessBackupUpdate() {
                         WriteToSoundPlayerLog("BACKUP UPDATE: Set BackupINI to false", __LINE__);
                     } else if (backupConfigs.find(currentSection) != backupConfigs.end() &&
                              backupConfigs[currentSection].find(key) != backupConfigs[currentSection].end()) {
-                        buffer << key << " = " << backupConfigs[currentSection][key] << "\n";
-                        WriteToSoundPlayerLog("BACKUP UPDATE: Restored " + currentSection + " -> " + key + " = " + backupConfigs[currentSection][key], __LINE__);
+                        
+                        std::string backupValue = backupConfigs[currentSection][key];
+                        
+                        if (currentSection == "[Skyrim Audio]" && key == "MuteGameMusicDuringOStim") {
+                            std::string lowerValue = backupValue;
+                            std::transform(lowerValue.begin(), lowerValue.end(), lowerValue.begin(), ::tolower);
+                            
+                            if (lowerValue == "true" || lowerValue == "1" || lowerValue == "yes") {
+                                backupValue = "false";
+                                WriteToSoundPlayerLog("BACKUP UPDATE: Converted 'true' to 'false' for MuteGameMusicDuringOStim", __LINE__);
+                            } else if (lowerValue != "false" && lowerValue != "0" && lowerValue != "disabled" &&
+                                       lowerValue != "0010486c" && lowerValue != "muscombatboss" && lowerValue != "musspecialdeath") {
+                                backupValue = "0010486c";
+                                WriteToSoundPlayerLog("BACKUP UPDATE: Invalid code replaced with '0010486c' for MuteGameMusicDuringOStim", __LINE__);
+                            }
+                        }
+                        
+                        buffer << key << " = " << backupValue << "\n";
+                        WriteToSoundPlayerLog("BACKUP UPDATE: Restored " + currentSection + " -> " + key + " = " + backupValue, __LINE__);
                     } else {
                         buffer << line << "\n";
                     }
@@ -1595,7 +1619,8 @@ bool LoadIniSettings() {
         bool newVolumeEnabled = g_volumeControlEnabled.load();
         SoundMenuKeyMode newSoundMenuKeyMode = g_soundMenuKeyMode;
         std::string newSoundMenuKeyAuthor = g_soundMenuKeyAuthor;
-        
+        std::string newMuteMusicCode = g_muteMusicCode;
+
         if (g_lastAuthorName.empty()) {
             g_lastAuthorName = g_soundMenuKeyAuthor;
         }
@@ -1629,9 +1654,30 @@ bool LoadIniSettings() {
                 } else if (currentSection == "Top Notifications" && key == "Visible") {
                     std::transform(value.begin(), value.end(), value.begin(), ::tolower);
                     newTopNotifications = (value == "true" || value == "1" || value == "yes");
-                } else if (currentSection == "Skyrim Audio" && key == "MuteGameMusicDuringOStim") {
-                    std::transform(value.begin(), value.end(), value.begin(), ::tolower);
-                    newMuteGameMusic = (value == "true" || value == "1" || value == "yes");
+                } else if (currentSection == "Skyrim Audio") {
+                    if (key == "MuteGameMusicDuringOStim") {
+                        std::string lowerValue = value;
+                        std::transform(lowerValue.begin(), lowerValue.end(), lowerValue.begin(), ::tolower);
+                        if (lowerValue == "false" || lowerValue == "0" || lowerValue == "disabled") {
+                            newMuteGameMusic = false;
+                            newMuteMusicCode = "";
+                        } else if (lowerValue == "true" || lowerValue == "1" || lowerValue == "yes") {
+                            newMuteGameMusic = true;
+                            newMuteMusicCode = "0010486c";
+                        } else if (lowerValue == "muscombatboss") {
+                            newMuteGameMusic = true;
+                            newMuteMusicCode = "MUSCombatBoss";
+                        } else if (lowerValue == "musspecialdeath") {
+                            newMuteGameMusic = true;
+                            newMuteMusicCode = "MUSSpecialDeath";
+                        } else if (lowerValue == "0010486c") {
+                            newMuteGameMusic = true;
+                            newMuteMusicCode = "0010486c";
+                        } else {
+                            newMuteGameMusic = true;
+                            newMuteMusicCode = "0010486c";
+                        }
+                    }
                 } else if (currentSection == "Menu Sound") {
                     if (key == "SoundMenuKey") {
                         std::string lowerValue = value;
@@ -1772,7 +1818,8 @@ bool LoadIniSettings() {
         g_tagVolume = newTagVolume;
         g_soundMenuKeyVolume = newSoundMenuKeyVolume;
         g_volumeControlEnabled = newVolumeEnabled;
-        
+        g_muteMusicCode = newMuteMusicCode;
+
         if (authorChanged && !newSoundMenuKeyAuthor.empty() && !g_iniFirstLoad) {
             WriteToSoundPlayerLog("AUTHOR CHANGED: '" + g_soundMenuKeyAuthor + "' -> '" + newSoundMenuKeyAuthor + "'", __LINE__);
             g_soundMenuKeyAuthor = newSoundMenuKeyAuthor;
@@ -3884,65 +3931,150 @@ void MuteGameMusic() {
         return;
     }
     
-    if (g_gameMusicMuted) {
+    if (g_musicTracksCleared) {
+        return;
+    }
+
+    // Capturar snapshot del estado actual
+    g_muteGameMusicDuringOStim_snapshot = g_muteGameMusicDuringOStim.load();
+
+    WriteToSoundPlayerLog("========================================", __LINE__);
+    WriteToSoundPlayerLog("MUTING ALL GAME MUSIC (auto-detection)", __LINE__);
+    WriteToSoundPlayerLog("MUTE SNAPSHOT: Captured MuteGameMusicDuringOStim = " +
+                         std::string(g_muteGameMusicDuringOStim_snapshot.load() ? "true" : "false"), __LINE__);
+    
+    if (g_muteMusicCode.empty()) {
+        WriteToSoundPlayerLog("Music mute disabled via INI", __LINE__);
+        WriteToSoundPlayerLog("========================================", __LINE__);
         return;
     }
     
-    try {
-        auto* settings = RE::GameSettingCollection::GetSingleton();
-        if (settings) {
-            auto* musicVol = settings->GetSetting("fAudioMusicVolMult");
-            if (!musicVol) {
-                // Fallback para algunas versiones
-                musicVol = settings->GetSetting("fMusicVolume");
-            }
-
-            if (musicVol) {
-                g_originalMusicVolume = musicVol->GetFloat();
-                musicVol->data.f = 0.0f; // MUTE
-                g_gameMusicMuted = true;
-                
-                WriteToSoundPlayerLog("Skyrim music muted via GameSettingCollection (original: " + 
-                    std::to_string(static_cast<int>(g_originalMusicVolume * 100)) + "%)", __LINE__);
-                logger::info("Game music muted, original saved: {}", g_originalMusicVolume);
-            } else {
-                WriteToSoundPlayerLog("WARNING: Could not find music volume setting", __LINE__);
-            }
+    WriteToSoundPlayerLog("Pre-waking audio engine via console command...", __LINE__);
+    WriteToSoundPlayerLog("Using music code: " + g_muteMusicCode, __LINE__);
+    ExecuteConsoleCommand("addmusic " + g_muteMusicCode);
+    std::this_thread::sleep_for(std::chrono::milliseconds(75));
+    
+    auto* dataHandler = RE::TESDataHandler::GetSingleton();
+    if (!dataHandler) {
+        WriteToSoundPlayerLog("ERROR: TESDataHandler not available", __LINE__);
+        WriteToSoundPlayerLog("========================================", __LINE__);
+        return;
+    }
+    
+    int mutedCount = 0;
+    int skippedCount = 0;
+    
+    for (auto* musicType : dataHandler->GetFormArray<RE::BGSMusicType>()) {
+        if (!musicType) {
+            continue;
         }
-    } catch (const std::exception& e) {
-        WriteToSoundPlayerLog("ERROR: Failed to mute game music: " + std::string(e.what()), __LINE__);
-    } catch (...) {
-        WriteToSoundPlayerLog("ERROR: Unknown error muting game music", __LINE__);
+        
+        if (musicType->tracks.empty()) {
+            skippedCount++;
+            continue;
+        }
+        
+        g_originalMusicTracks[musicType] = musicType->tracks;
+        
+        musicType->tracks.clear();
+        
+        mutedCount++;
+    }
+    
+    if (mutedCount > 0) {
+        g_musicTracksCleared = true;
+        g_gameMusicMuted = true;
+        WriteToSoundPlayerLog("MUSIC MUTED: " + std::to_string(mutedCount) + " types silenced, " + std::to_string(skippedCount) + " empty skipped", __LINE__);
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(75));
+        
+        ExecuteConsoleCommand("removemusic " + g_muteMusicCode);
+        WriteToSoundPlayerLog("Audio engine cleanup command executed", __LINE__);
+        
+        ForceAudioRefresh();
+        WriteToSoundPlayerLog("========================================", __LINE__);
+    } else {
+        WriteToSoundPlayerLog("WARNING: No music types found to mute", __LINE__);
+        WriteToSoundPlayerLog("========================================", __LINE__);
+    }
+}
+
+void ForceAudioRefresh() {
+    HWND hwndJuego = FindWindow(nullptr, L"Skyrim Special Edition");
+    if (!hwndJuego) {
+        hwndJuego = FindWindow(nullptr, L"Skyrim VR");
+    }
+    if (hwndJuego) {
+        SendMessage(hwndJuego, WM_ACTIVATEAPP, 0, 0);
+        Sleep(50);
+        SendMessage(hwndJuego, WM_ACTIVATEAPP, 1, 0);
+    }
+}
+
+void ExecuteConsoleCommand(const std::string& command) {
+    const auto scriptFactory = RE::IFormFactory::GetConcreteFormFactoryByType<RE::Script>();
+    if (scriptFactory) {
+        auto* script = scriptFactory->Create();
+        if (script) {
+            script->SetCommand(command);
+            script->CompileAndRun(RE::PlayerCharacter::GetSingleton());
+            delete script;
+        }
     }
 }
 
 void RestoreGameMusic() {
-    if (!g_gameMusicMuted) {
+    if (!g_musicTracksCleared) {
         return;
     }
     
-    try {
-        auto* settings = RE::GameSettingCollection::GetSingleton();
-        if (settings) {
-            auto* musicVol = settings->GetSetting("fAudioMusicVolMult");
-            if (!musicVol) {
-                musicVol = settings->GetSetting("fMusicVolume");
-            }
+    WriteToSoundPlayerLog("========================================", __LINE__);
+    WriteToSoundPlayerLog("RESTORING GAME MUSIC: Reloading music tracks to BGSMusicType", __LINE__);
 
-            if (musicVol) {
-                musicVol->data.f = g_originalMusicVolume; // RESTORE
-                g_gameMusicMuted = false;
-                
-                WriteToSoundPlayerLog("Skyrim music restored via GameSettingCollection (volume: " + 
-                    std::to_string(static_cast<int>(g_originalMusicVolume * 100)) + "%)", __LINE__);
-                logger::info("Game music restored to: {}", g_originalMusicVolume);
-            }
-        }
-    } catch (const std::exception& e) {
-        WriteToSoundPlayerLog("ERROR: Failed to restore game music: " + std::string(e.what()), __LINE__);
-    } catch (...) {
-        WriteToSoundPlayerLog("ERROR: Unknown error restoring game music", __LINE__);
+    // Detectar si el INI cambió durante la sesión
+    bool currentMuteSetting = g_muteGameMusicDuringOStim.load();
+    bool snapshotMuteSetting = g_muteGameMusicDuringOStim_snapshot.load();
+
+    if (currentMuteSetting != snapshotMuteSetting) {
+        WriteToSoundPlayerLog("MUTE SNAPSHOT: Value changed during OStim session!", __LINE__);
+        WriteToSoundPlayerLog("MUTE SNAPSHOT: Entry value = " +
+                             std::string(snapshotMuteSetting ? "true" : "false") +
+                             ", Current value = " +
+                             std::string(currentMuteSetting ? "true" : "false"), __LINE__);
+        WriteToSoundPlayerLog("MUTE SNAPSHOT: Using entry (snapshot) value for restoration", __LINE__);
     }
+
+    int restoredCount = 0;
+    
+    for (auto& [musicType, originalTracks] : g_originalMusicTracks) {
+        if (musicType) {
+            musicType->tracks = originalTracks;
+            
+            restoredCount++;
+        }
+    }
+    
+    g_originalMusicTracks.clear();
+    g_musicTracksCleared = false;
+    g_gameMusicMuted = false;
+    
+    WriteToSoundPlayerLog("MUSIC RESTORED: " + std::to_string(restoredCount) + " music types restored", __LINE__);
+    
+    std::this_thread::sleep_for(std::chrono::milliseconds(75));
+    
+    ForceAudioRefresh();
+    
+    WriteToSoundPlayerLog("Forcing audio engine refresh via console commands...", __LINE__);
+    if (!g_muteMusicCode.empty() && g_muteGameMusicDuringOStim_snapshot.load()) {
+        ExecuteConsoleCommand("addmusic " + g_muteMusicCode);
+        std::this_thread::sleep_for(std::chrono::milliseconds(75));
+        ExecuteConsoleCommand("removemusic " + g_muteMusicCode);
+        WriteToSoundPlayerLog("Audio engine refresh commands executed with snapshot code: " + g_muteMusicCode, __LINE__);
+    } else {
+        WriteToSoundPlayerLog("Audio engine refresh skipped (snapshot disabled or code empty)", __LINE__);
+    }
+    
+    WriteToSoundPlayerLog("========================================", __LINE__);
 }
 
 class GameEventProcessor : public RE::BSTEventSink<RE::TESActivateEvent>,
@@ -4164,7 +4296,13 @@ void ProcessOStimLog() {
         std::string line;
 
         while (std::getline(ostimLog, line)) {
-            if (line.find("[warning]") != std::string::npos || line.find("[W]") != std::string::npos) {
+            if (line.find("[warning]") != std::string::npos) {
+                continue;
+            }
+            
+            std::string trimmedLine = line;
+            trimmedLine.erase(0, trimmedLine.find_first_not_of(" \t\r\n"));
+            if (!trimmedLine.empty() && trimmedLine[0] == '[' && trimmedLine.length() > 2 && trimmedLine[1] == 'W' && trimmedLine[2] == ']') {
                 continue;
             }
 
@@ -4177,18 +4315,16 @@ void ProcessOStimLog() {
 
             bool isThreadStop = false;
 
-            if (line.find("[Thread.cpp:634] closing thread") != std::string::npos) {
+            if (line.find("[Thread.cpp:634]") != std::string::npos && line.find("closing thread") != std::string::npos) {
                 isThreadStop = true;
-                WriteToSoundPlayerLog("DETECTED: OStim thread closing", __LINE__);
-            } else if (line.find("[ThreadManager.cpp:174] trying to stop thread") != std::string::npos) {
+                WriteToSoundPlayerLog("DETECTED: OStim thread closing (official format)", __LINE__);
+            } else if (line.find("[ThreadManager.cpp:174]") != std::string::npos && line.find("trying to stop thread") != std::string::npos) {
                 isThreadStop = true;
-                WriteToSoundPlayerLog("DETECTED: OStim trying to stop thread", __LINE__);
-            } else if (line.find("[I]") != std::string::npos &&
-                       line.find("closing thread") != std::string::npos) {
+                WriteToSoundPlayerLog("DETECTED: OStim trying to stop thread (official format)", __LINE__);
+            } else if (line.find("[I]") != std::string::npos && line.find("closing thread") != std::string::npos) {
                 isThreadStop = true;
                 WriteToSoundPlayerLog("DETECTED: OStim thread closing (non-official format)", __LINE__);
-            } else if (line.find("[I]") != std::string::npos &&
-                       line.find("trying to stop thread") != std::string::npos) {
+            } else if (line.find("[I]") != std::string::npos && line.find("trying to stop thread") != std::string::npos) {
                 isThreadStop = true;
                 WriteToSoundPlayerLog("DETECTED: OStim trying to stop thread (non-official format)", __LINE__);
             }
@@ -4205,8 +4341,7 @@ void ProcessOStimLog() {
             bool isAnimationLine = false;
             std::string animationName;
 
-            if (line.find("[info]") != std::string::npos &&
-                line.find("[Thread.cpp:195] thread 0 changed to node") != std::string::npos) {
+            if (line.find("[info]") != std::string::npos && line.find("[Thread.cpp:195]") != std::string::npos && line.find("thread 0 changed to node") != std::string::npos) {
                 size_t nodePos = line.find("changed to node ");
                 if (nodePos != std::string::npos) {
                     size_t startPos = nodePos + 16;
@@ -4215,20 +4350,17 @@ void ProcessOStimLog() {
                         isAnimationLine = true;
                     }
                 }
-            } else if (line.find("[info]") != std::string::npos &&
-                       line.find("[OStimMenu.h:48] UI_TransitionRequest") != std::string::npos) {
+            } else if (line.find("[info]") != std::string::npos && line.find("[OStimMenu.h:48]") != std::string::npos && line.find("UI_TransitionRequest") != std::string::npos) {
                 size_t lastOpenBrace = line.rfind('{');
                 size_t lastCloseBrace = line.rfind('}');
 
-                if (lastOpenBrace != std::string::npos && lastCloseBrace != std::string::npos &&
-                    lastCloseBrace > lastOpenBrace) {
+                if (lastOpenBrace != std::string::npos && lastCloseBrace != std::string::npos && lastCloseBrace > lastOpenBrace) {
                     animationName = line.substr(lastOpenBrace + 1, lastCloseBrace - lastOpenBrace - 1);
                     if (!animationName.empty()) {
                         isAnimationLine = true;
                     }
                 }
-            } else if (line.find("[I]") != std::string::npos &&
-                       line.find("thread 0 changed to node") != std::string::npos) {
+            } else if (line.find("[I]") != std::string::npos && line.find("thread 0 changed to node") != std::string::npos) {
                 size_t nodePos = line.find("changed to node ");
                 if (nodePos != std::string::npos) {
                     size_t startPos = nodePos + 16;
@@ -4237,13 +4369,11 @@ void ProcessOStimLog() {
                         isAnimationLine = true;
                     }
                 }
-            } else if (line.find("[I]") != std::string::npos &&
-                       line.find("UI_TransitionRequest") != std::string::npos) {
+            } else if (line.find("[I]") != std::string::npos && line.find("UI_TransitionRequest") != std::string::npos) {
                 size_t lastOpenBrace = line.rfind('{');
                 size_t lastCloseBrace = line.rfind('}');
 
-                if (lastOpenBrace != std::string::npos && lastCloseBrace != std::string::npos &&
-                    lastCloseBrace > lastOpenBrace) {
+                if (lastOpenBrace != std::string::npos && lastCloseBrace != std::string::npos && lastCloseBrace > lastOpenBrace) {
                     animationName = line.substr(lastOpenBrace + 1, lastCloseBrace - lastOpenBrace - 1);
                     if (!animationName.empty()) {
                         isAnimationLine = true;
@@ -4270,12 +4400,14 @@ void ProcessOStimLog() {
                 WriteToSoundPlayerLog(formattedAnimation, __LINE__, true);
 
                 if (!g_firstAnimationDetected) {
-                    WriteToSoundPlayerLog("First animation detected, reloading sound mappings and regenerating scripts",
+                    WriteToSoundPlayerLog("First animation detected, muting game music immediately",
                                           __LINE__);
-                    LoadSoundMappings();
-                    g_firstAnimationDetected = true;
                     
                     MuteGameMusic();
+                    g_firstAnimationDetected = true;
+                    
+                    WriteToSoundPlayerLog("Loading sound mappings in background...", __LINE__);
+                    LoadSoundMappings();
                     StartSoundMenuKey();
                 }
 
@@ -4678,45 +4810,44 @@ bool LoadSoundMappings() {
 
             std::string soundFile = content.substr(soundQuoteStart + 1, soundQuoteEnd - soundQuoteStart - 1);
 
-            int repeatDelay = 0;
-            size_t delayQuoteEnd = std::string::npos;
-
+            std::string listStr = "list-1";
+            int listNumber = 1;
+            size_t listQuoteEnd = std::string::npos;
+            
             size_t commaPos = content.find(',', soundQuoteEnd);
             size_t arrayEnd = content.find(']', soundQuoteEnd);
-
+            
             if (commaPos != std::string::npos && arrayEnd != std::string::npos && commaPos < arrayEnd) {
-                size_t delayQuoteStart = content.find('"', commaPos);
-
-                if (delayQuoteStart != std::string::npos && delayQuoteStart < arrayEnd) {
-                    delayQuoteEnd = content.find('"', delayQuoteStart + 1);
-
-                    if (delayQuoteEnd != std::string::npos && delayQuoteEnd < arrayEnd) {
-                        std::string delayStr = content.substr(delayQuoteStart + 1, delayQuoteEnd - delayQuoteStart - 1);
-                        try {
-                            repeatDelay = std::stoi(delayStr);
-                            if (repeatDelay < 0) repeatDelay = 0;
-                        } catch (...) {
-                            logger::warn("Invalid delay '{}' for animation '{}', defaulting to 0", delayStr, animationName);
-                            repeatDelay = 0;
+                size_t listQuoteStart = content.find('"', commaPos);
+                
+                if (listQuoteStart != std::string::npos && listQuoteStart < arrayEnd) {
+                    listQuoteEnd = content.find('"', listQuoteStart + 1);
+                    
+                    if (listQuoteEnd != std::string::npos && listQuoteEnd < arrayEnd) {
+                        listStr = content.substr(listQuoteStart + 1, listQuoteEnd - listQuoteStart - 1);
+                        if (listStr.find("list-") == 0) {
+                            try {
+                                listNumber = std::stoi(listStr.substr(5));
+                            } catch (...) {
+                                listNumber = 1;
+                            }
                         }
                     }
                 }
             }
-
-            std::string listStr = "list-1";
-            int listNumber = 1;
             
-            size_t listQuoteStart = content.find('"', delayQuoteEnd != std::string::npos ? delayQuoteEnd : soundQuoteEnd);
-            if (listQuoteStart != std::string::npos && listQuoteStart < arrayEnd) {
-                size_t listQuoteEnd = content.find('"', listQuoteStart + 1);
-                if (listQuoteEnd != std::string::npos && listQuoteEnd < arrayEnd) {
-                    listStr = content.substr(listQuoteStart + 1, listQuoteEnd - listQuoteStart - 1);
-                    if (listStr.find("list-") == 0) {
-                        try {
-                            listNumber = std::stoi(listStr.substr(5));
-                        } catch (...) {
-                            listNumber = 1;
-                        }
+            int repeatDelay = 0;
+            
+            size_t delayQuoteStart = content.find('"', listQuoteEnd != std::string::npos ? listQuoteEnd : soundQuoteEnd);
+            if (delayQuoteStart != std::string::npos && delayQuoteStart < arrayEnd) {
+                size_t delayQuoteEnd = content.find('"', delayQuoteStart + 1);
+                if (delayQuoteEnd != std::string::npos && delayQuoteEnd < arrayEnd) {
+                    std::string delayStr = content.substr(delayQuoteStart + 1, delayQuoteEnd - delayQuoteStart - 1);
+                    try {
+                        repeatDelay = std::stoi(delayStr);
+                        if (repeatDelay < 0) repeatDelay = 0;
+                    } catch (...) {
+                        repeatDelay = 0;
                     }
                 }
             }
@@ -5078,13 +5209,14 @@ void InitializePlugin() {
 
         WriteToSoundPlayerLog("OSoundtracks Plugin with BASS Audio Library, DUAL-PATH and Wabbajack/MO2 Support - Starting...", __LINE__);
         WriteToSoundPlayerLog("========================================", __LINE__);
-        WriteToSoundPlayerLog("OSoundtracks Plugin - v16.3.1 BASS", __LINE__);
+        WriteToSoundPlayerLog("OSoundtracks Plugin - v17.3.2 BASS", __LINE__);
         WriteToSoundPlayerLog("Started: " + GetCurrentTimeString(), __LINE__);
         WriteToSoundPlayerLog("========================================", __LINE__);
         WriteToSoundPlayerLog("Documents: " + g_documentsPath, __LINE__);
         WriteToSoundPlayerLog("Game Path (initial): " + g_gamePath, __LINE__);
         WriteToSoundPlayerLog("FEATURES: BASS Audio Library for native sound playback", __LINE__);
         WriteToSoundPlayerLog("DUAL-PATH SYSTEM: PRIMARY + SECONDARY log locations", __LINE__);
+        WriteToSoundPlayerLog("DUAL-FORMAT SYSTEM: Official + Non-official OStim.log formats", __LINE__);
         WriteToSoundPlayerLog("WABBAJACK/MO2 SUPPORT: Enhanced path detection with DLL validation", __LINE__);
         WriteToSoundPlayerLog("FORMATS: WAV, MP3, OGG supported via BASS", __LINE__);
         WriteToSoundPlayerLog("CHANNELS: 6 simultaneous streams (Base, Menu, Specific, Effect, Position, Tag)", __LINE__);
@@ -5095,7 +5227,7 @@ void InitializePlugin() {
         WriteToSoundPlayerLog("NEW: Automatic INI backup to OSoundtracks_MCM_Backup", __LINE__);
 
         WriteToActionsLog("========================================", __LINE__);
-        WriteToActionsLog("OSoundtracks Actions Monitor - v16.3.1 BASS", __LINE__);
+        WriteToActionsLog("OSoundtracks Actions Monitor - v17.3.2 BASS", __LINE__);
         WriteToActionsLog("Started: " + GetCurrentTimeString(), __LINE__);
         WriteToActionsLog("========================================", __LINE__);
         WriteToActionsLog("Monitoring game events: Menu.", __LINE__);
@@ -5198,6 +5330,10 @@ void MessageListener(SKSE::MessagingInterface::Message* message) {
 
             g_activationMessageShown = false;
             g_pauseMonitoring = false;
+            
+            g_musicTracksCleared = false;
+            g_originalMusicTracks.clear();
+            g_gameMusicMuted = false;
 
             WriteToSoundPlayerLog("NEW GAME: All flags reset, ready for fresh initialization", __LINE__);
             InitializePlugin();
@@ -5254,7 +5390,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
     SKSE::Init(a_skse);
     SetupLog();
 
-    logger::info("OSoundtracks Plugin v16.3.1 BASS - Starting...");
+    logger::info("OSoundtracks Plugin v17.3.2 BASS - Starting...");
 
     InitializePlugin();
 
@@ -5267,7 +5403,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
 
 constinit auto SKSEPlugin_Version = []() {
     SKSE::PluginVersionData v;
-    v.PluginVersion({16, 3, 1});
+    v.PluginVersion({17, 3, 2});
     v.PluginName("OSoundtracks OStim Monitor");
     v.AuthorName("John95AC");
     v.UsesAddressLibrary();

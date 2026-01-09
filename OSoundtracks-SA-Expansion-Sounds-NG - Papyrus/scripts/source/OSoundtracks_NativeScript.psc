@@ -13,6 +13,7 @@ Bool function GetStartup() native global
 Bool function GetVisible() native global
 Bool function GetBackup() native global
 Bool function GetMuteGameMusic() native global
+String function GetMuteGameMusicValue() native global
 
 String function GetSoundMenuKeyMode() native global
 String function GetAuthor() native global
@@ -31,9 +32,11 @@ function SetStartup(Bool value) native global
 function SetVisible(Bool value) native global
 function SetBackup(Bool value) native global
 function SetMuteGameMusic(Bool value) native global
+function SetMuteGameMusicValue(String value) native global
 
 function SetSoundMenuKeyMode(String value) native global
 function SetAuthor(String value) native global
 
 function ActivateAdvancedMCM() native global
 function ActivateStandaloneMode() native global
+function OpenURL(String url) native global

@@ -861,6 +861,10 @@ namespace OSoundtracks_Native {
         return GetIniBool("Skyrim Audio", "MuteGameMusicDuringOStim", true);
     }
 
+    std::string GetMuteGameMusicValue(RE::StaticFunctionTag*) {
+        return GetIniString("Skyrim Audio", "MuteGameMusicDuringOStim", "MUSCombatBoss");
+    }
+
     std::string GetSoundMenuKeyMode(RE::StaticFunctionTag*) {
         return GetIniString("Menu Sound", "SoundMenuKey", "Author_Order");
     }
@@ -959,6 +963,10 @@ namespace OSoundtracks_Native {
         SetIniBool("Skyrim Audio", "MuteGameMusicDuringOStim", value);
     }
 
+    void SetMuteGameMusicValue(RE::StaticFunctionTag*, std::string value) {
+        SetIniValue("Skyrim Audio", "MuteGameMusicDuringOStim", value);
+    }
+
     void SetSoundMenuKeyMode(RE::StaticFunctionTag*, std::string value) {
         SetIniValue("Menu Sound", "SoundMenuKey", value);
     }
@@ -977,6 +985,15 @@ namespace OSoundtracks_Native {
         WriteToAdvancedLog("Standalone Mode button pressed - Not yet implemented", __LINE__);
     }
 
+    void OpenURL(RE::StaticFunctionTag*, std::string url) {
+        if (url.empty()) {
+            WriteToAdvancedLog("OpenURL called with empty URL", __LINE__);
+            return;
+        }
+        WriteToAdvancedLog("Opening URL: " + url, __LINE__);
+        ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+    }
+
     bool RegisterPapyrusFunctions(RE::BSScript::IVirtualMachine* vm) {
         vm->RegisterFunction("GetBaseVolume", "OSoundtracks_NativeScript", GetBaseVolume);
         vm->RegisterFunction("GetMenuVolume", "OSoundtracks_NativeScript", GetMenuVolume);
@@ -990,6 +1007,7 @@ namespace OSoundtracks_Native {
         vm->RegisterFunction("GetVisible", "OSoundtracks_NativeScript", GetVisible);
         vm->RegisterFunction("GetBackup", "OSoundtracks_NativeScript", GetBackup);
         vm->RegisterFunction("GetMuteGameMusic", "OSoundtracks_NativeScript", GetMuteGameMusic);
+        vm->RegisterFunction("GetMuteGameMusicValue", "OSoundtracks_NativeScript", GetMuteGameMusicValue);
         vm->RegisterFunction("GetSoundMenuKeyMode", "OSoundtracks_NativeScript", GetSoundMenuKeyMode);
         vm->RegisterFunction("GetAuthor", "OSoundtracks_NativeScript", GetAuthor);
         vm->RegisterFunction("GetAuthorList", "OSoundtracks_NativeScript", GetAuthorList);
@@ -1005,12 +1023,14 @@ namespace OSoundtracks_Native {
         vm->RegisterFunction("SetVisible", "OSoundtracks_NativeScript", SetVisible);
         vm->RegisterFunction("SetBackup", "OSoundtracks_NativeScript", SetBackup);
         vm->RegisterFunction("SetMuteGameMusic", "OSoundtracks_NativeScript", SetMuteGameMusic);
+        vm->RegisterFunction("SetMuteGameMusicValue", "OSoundtracks_NativeScript", SetMuteGameMusicValue);
         vm->RegisterFunction("SetSoundMenuKeyMode", "OSoundtracks_NativeScript", SetSoundMenuKeyMode);
         vm->RegisterFunction("SetAuthor", "OSoundtracks_NativeScript", SetAuthor);
         vm->RegisterFunction("ActivateAdvancedMCM", "OSoundtracks_NativeScript", ActivateAdvancedMCM);
         vm->RegisterFunction("ActivateStandaloneMode", "OSoundtracks_NativeScript", ActivateStandaloneMode);
+        vm->RegisterFunction("OpenURL", "OSoundtracks_NativeScript", OpenURL);
         logger::info("OSoundtracks_NativeScript functions registered successfully");
-        WriteToAdvancedLog("Papyrus functions registered successfully (29 functions)", __LINE__);
+        WriteToAdvancedLog("Papyrus functions registered successfully (32 functions)", __LINE__);
         return true;
     }
 }
@@ -1338,7 +1358,7 @@ void InitializePlugin() {
 
         WriteToAdvancedLog("OSoundtracks MCM Plugin - Starting...", __LINE__);
         WriteToAdvancedLog("========================================", __LINE__);
-        WriteToAdvancedLog("OSoundtracks MCM Plugin - v16.3.0", __LINE__);
+        WriteToAdvancedLog("OSoundtracks MCM Plugin - v17.3.0", __LINE__);
         WriteToAdvancedLog("Started: " + GetCurrentTimeString(), __LINE__);
         WriteToAdvancedLog("========================================", __LINE__);
         
@@ -1410,7 +1430,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
     SKSE::Init(a_skse);
     SetupLog();
 
-    logger::info("OSoundtracks MCM Plugin v16.3.0 - Starting...");
+    logger::info("OSoundtracks MCM Plugin v17.3.0 - Starting...");
     
     auto paths = GetAllOSoundtracksLogsPaths();
     try {
@@ -1419,7 +1439,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
     } catch (...) {}
 
     WriteToAdvancedLog("========================================", __LINE__);
-    WriteToAdvancedLog("OSoundtracks MCM Plugin v16.3.0", __LINE__);
+    WriteToAdvancedLog("OSoundtracks MCM Plugin v17.3.0", __LINE__);
     WriteToAdvancedLog("Started: " + GetCurrentTimeString(), __LINE__);
     WriteToAdvancedLog("========================================", __LINE__);
 
@@ -1435,7 +1455,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
 
 constinit auto SKSEPlugin_Version = []() {
     SKSE::PluginVersionData v;
-    v.PluginVersion({16, 3, 0});
+    v.PluginVersion({17, 3, 0});
     v.PluginName("OSoundtracks MCM");
     v.AuthorName("John95AC");
     v.UsesAddressLibrary();

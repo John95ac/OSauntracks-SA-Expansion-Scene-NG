@@ -11,11 +11,16 @@ The OSoundtracks-SA-Expansion-Sounds-NG project consists of **3 separate DLL com
 
 This SKSE Mod processes INI configuration files and builds the master `OSoundtracks-SA-Expansion-Sounds-NG.json` file at game startup. It translates human-readable rules into a stable JSON format with built-in backup and corruption recovery.
 
-This is the core data processing component of the OSoundtracks system, it reads INI rules and generates the structured JSON that other components depend on.
+**Development History:**
+The OSoundtracks system was originally developed using a PowerShell (.ps1) script that used Windows Media Player as the audio engine - imagine using a potato, put a music player on it and that was the player since I used the simplest elements that Windows has but with programmed sequences to pause, play and more, only engineering. The script handled programmed sequences to play, pause, and control WAV files based on OStim actions. This approach worked for several months as a way to avoid using the game's audio engine. 
+
+The project later evolved to use the BASS Library - a free, lightweight, and open-source audio solution ideal for this purpose. BASS provides superior performance compared to the original PowerShell script approach while maintaining open licensing for non-commercial use.
+
+This is the core data processing component of the OSoundtracks system. It reads INI rules and generates the structured JSON that other components depend on.
 
 ---
 
-## Component 2: OSoundtracks-SA-Expansion-Sounds-NG - Sound-Player.dll (v16.3.1)
+## Component 2: OSoundtracks-SA-Expansion-Sounds-NG - Sound-Player.dll (v17.3.0)
 
 **Audio Playback Engine** - BASS-based sound system
 
@@ -24,16 +29,22 @@ This SKSE Plugin monitors OStim.log for animation transitions and plays correspo
 Features:
 
 - Real-time OStim.log monitoring for animation transitions
-- Multi-channel audio playback (base sounds + specific sounds)
+- Multi-channel audio playback (7 channels: BASE, MENU, SPECIFIC, EFFECT, POSITION, TAG, SoundMenuKey)
 - Extension-less sound file resolution (.wav/.mp3/.ogg priority)
 - Loop and single-playback modes
-- Volume control via INI settings
-- Mute game music during OStim functionality
+- Volume control via INI settings (0-200% range with amplification support)
+- **Mute Game Music system** with auto-detection of 390+ Music Types (100% coverage)
+- **Instant audio refresh** via SendMessage(WM_ACTIVATEAPP) - works in fullscreen
+- **Dynamic INI configuration** - 4 music codes: false, 0010486c, MUSCombatBoss, MUSSpecialDeath
+- **Lag optimization** - 79% reduction (945ms → 194ms perceived)
+- **Console command integration** - addmusic/removemusic sequences for audio engine
+- **Backup restoration system** with JSON order fix
+- **Unified delay system** - 75ms consistency across all operations
 - **Dual-Format OStim.log Support** - Compatible with both official and non-official OStim builds
 
 ---
 
-## Component 3: OSoundtracks-SA-Expansion-Sounds-NG - MCM.dll (v16.3.0)
+## Component 3: OSoundtracks-SA-Expansion-Sounds-NG - MCM.dll (v17.3.0)
 
 **Mod Configuration Menu** - Independent Skyrim MCM interface
 
@@ -42,8 +53,13 @@ This SKSE Plugin provides an independent MCM interface for the OSoundtracks syst
 Features:
 
 - Independent MCM integration with Skyrim's menu system
-- Reserved functionality for future advanced settings
+- Full volume control for 7 audio channels (Base, Menu, Specific, Effect, Position, TAG, SoundMenuKey)
+- Mute Game Music system with 4-toggle UI (Master + 3 method selection)
+- 26 contextual tooltips for all MCM elements on hover
+- 9 web link buttons with confirmation dialogs (Nexus, Patreon, Ko-Fi, Web Advances, OSTR, recommended MCMs)
+- Native OpenURL function via Windows API ShellExecuteA
 - Direct access to OSoundtracks configuration from game menu
+- Author selection and SoundMenuKey playback modes
 
 ---
 
@@ -531,7 +547,7 @@ This Mod SKSE ships a stability-first pipeline for real mod environments:
 
 ## Component 2: Audio Playback Engine (OSoundtracks-SA-Expansion-Sounds-NG-Sound-Player.dll)
 
-**Current Version:** v16.3.1
+**Current Version:** v17.3.0
 
 This component monitors OStim.log for animation transitions and plays sounds using BASS Library. It is a robust replacement for the previous PS1-style audio system that suffered from lag issues. The BASS implementation provides smooth, multi-channel audio playback with real-time volume control and loop management.
 
@@ -709,6 +725,158 @@ This update significantly expands plugin compatibility while maintaining optimal
 
 ---
 
+**Version 16.4.1: Critical Dual-Format Fix**
+
+Fixed two critical bugs preventing animation detection in official OStim.log format.
+
+**Bugs Fixed:**
+- **Thread ID Issue**: Official format includes thread ID (`[29568]`) between `[Thread.cpp:195]` and `thread 0 changed to node` - Fixed by separating detection patterns
+- **Warning Filter Issue**: `[W]` filter was too broad, incorrectly discarding animations with 'W' in name - Fixed to only match `[W]` at line start after trimming
+
+**Supported Formats:**
+
+*Official OStim.log:*
+```
+[info] [29568] [Thread.cpp:195] thread 0 changed to node AnimationName
+[info] [29568] [OStimMenu.h:48] UI_TransitionRequest {}, {AnimationName}
+```
+
+*Latest OStim.log:*
+```
+[I] thread 0 changed to node AnimationName
+[I] UI_TransitionRequest {}, {AnimationName}
+```
+
+**Result**: ✅ Both formats now work correctly with proper pattern separation.
+
+---
+
+**Version 16.5.1: Music Type Silence System**
+
+Implemented direct music type muting by clearing track arrays from BGSMusicType.
+
+**Key Change**: Replaced GameSettingCollection method (ignored by audio engine) with direct track array manipulation.
+
+**How It Works:**
+- Backs up original track arrays from 5 music types (Combat, Explore, Dungeon, Town, Public)
+- Clears track arrays when OStim starts → silence
+- Restores original tracks when OStim ends → music returns
+
+**Benefits**: No ESP/ESL needed, instant runtime changes, perfect restoration guaranteed.
+
+---
+
+**Version 16.6.1: Auto-Detection of All Music Types**
+
+Changed from searching 5 specific names to automatic iteration over ALL registered BGSMusicType.
+
+**Key Change**: Replaced `LookupByEditorID()` with `TESDataHandler::GetFormArray<RE::BGSMusicType>()`
+
+**Results:**
+- 100% coverage vs 40% (previous only found 2 of 5 types)
+- Compatible with ALL music mods
+- Zero maintenance (no hardcoded names)
+- Finds 390+ Music Types automatically
+
+---
+
+**Version 16.7.1: Instant Audio Refresh + Console Commands**
+
+Fixed issue where tracks were cleared but music kept playing. Skyrim only refreshed audio on natural events.
+
+**Key Changes:**
+1. **ForceAudioRefresh()**: Simulates window focus change using `SendMessage(WM_ACTIVATEAPP)` - works in fullscreen, no flicker
+2. **Console Commands**: `addmusic 0010486c` → `removemusic 0010486c` to force audio engine reload
+
+**Sequences:**
+
+*Enter OStim:*
+1. addmusic (pre-wake) → 30ms → clear tracks → 30ms → removemusic → ForceAudioRefresh
+
+*Exit OStim:*
+1. Restore tracks → 50ms → ForceAudioRefresh → addmusic → 75ms → removemusic
+
+**Results:**
+- Silence: ~110ms perceived
+- Restore: ~175ms perceived
+- Works in fullscreen
+- Logs reduced 97% (780 lines → 3 lines)
+
+---
+
+**Version 17.1.0: Lag Optimization + Dynamic INI Code**
+
+Fixed 2+ second lag when entering OStim. LoadSoundMappings() (751ms) executed BEFORE MuteGameMusic (194ms).
+
+**Key Changes:**
+1. **Reorder execution**: MuteGameMusic() FIRST, then LoadSoundMappings() in background
+2. **Dynamic INI code**: User can choose music code without recompiling
+
+**INI Options:**
+- `false` - Disable mute completely
+- `0010486c` - Legacy (default)
+- `MUSCombatBoss` - Option A (Skyrim's "off" track)
+- `MUSSpecialDeath` - Option B (smooth transition)
+
+**Results:**
+- Lag: 945ms → 194ms (79% reduction)
+- Music silenced immediately
+- JSON loads in background invisible to user
+- 4 configurable options via INI
+
+---
+
+**Version 17.2.0: Backup Restoration + JSON Order Fix**
+
+Fixed two critical issues: backup configuration restoration and incorrect JSON field reading order.
+
+**Key Changes:**
+1. **Backup Restoration**: Restoring `MuteGameMusicDuringOStim` from backup now correctly handles non-"true" values
+2. **JSON Order Fix**: Swapped reading order - `listNumber` now read before `delay` (matches actual JSON format)
+
+**Backup Values Supported:**
+- `false` - Mute disabled
+- `0010486c` - Legacy code
+- `MUSCombatBoss` - Option A (case-insensitive)
+- `MUSSpecialDeath` - Option B (case-insensitive)
+- `true` - Auto-converted to "false" for safety
+
+**Results:**
+- Eliminates hundreds of "Invalid delay 'list-1'" warnings
+- Correctly parses JSON format: `["soundFile", "list-N", "delay"]`
+- Properly restores user's music code choice from backup
+
+---
+
+**Version 17.3.0: Unified Delay Experiment**
+
+Experimental attempt to fix erratic mute behavior by unifying all delays to 75ms.
+
+**Problem:** Inconsistent delays (50ms, 30ms, 50ms, 75ms) caused unpredictable behavior
+
+**Solution:** All delays unified to 75ms for total consistency
+
+**Changes:**
+- Mute delay 1: 50ms → 75ms
+- Mute delay 2: 30ms → 75ms
+- Restore delay 1: 50ms → 75ms
+- Restore delay 2: 75ms (unchanged)
+
+**Development Hell Note**
+
+I developed the Skyrim music mute system (v16.5.1 through v17.3.0) without any existing documentation or references available. The implementation uses:
+
+- Direct BGSMusicType track array manipulation
+- Windows API `SendMessage` with `WM_ACTIVATEAPP`
+- Console command sequences (`addmusic`/`removemusic`)
+- Delay optimization through multiple iterations
+
+This system provides runtime-controllable music muting using only CommonLibSSE, without external dependencies, ESP/ESL files, or invasive hooks.
+
+THIS SYSTEM IS STILL EXPERIMENTAL AND NOT 100% RELIABLE. THE SKYRIM MUSIC SYSTEM CAN BE RANDOM AND UNPREDICTABLE AT TIMES. THIS IS THE BEST SOLUTION I FOUND AFTER MONTHS OF WORK IN THIS DEVELOPMENT HELL. THE SENSIBLE APPROACH IS TO EITHER MUTE OR LOWER THE GAME BACKGROUND MUSIC AND INCREASE THE OSTIM MENU MUSIC VOLUME INSTEAD. THIS IS FOR THOSE WHO SPEND A LOT OF TIME ON THIS, BUT PERSONALLY I JUST LOWER THE GAME MUSIC VOLUME.
+
+---
+
 ## Component 3: MCM Interface (OSoundtracks-SA-Expansion-Sounds-NG-MCM.dll)
 
 **Current Version:** v16.3.0
@@ -848,6 +1016,93 @@ This version represents a comprehensive technical analysis of the entire OSoundt
 
 **INI Sections Comparison (What MCM Controls):**
 - MCM controls: BaseVolume, MenuVolume, SpecificVolume, MasterVolumeEnabled, Startup, Visible, Backup, EffectVolume, PositionVolume, TAGVolume, SoundMenuKeyVolume, MuteGameMusicDuringOStim, SoundMenuKey, Author
+
+---
+
+**Version 17.2.0: Mute Game Music UI - 4-Toggle System**
+
+Complete MCM interface for the Mute Game Music system introduced in Sound Player v17.1.0.
+
+**Key Changes:**
+1. **New Native Functions**: Added `GetMuteGameMusicValue()` and `SetMuteGameMusicValue()` for string-based INI manipulation
+2. **4-Toggle UI Layout**: Master toggle + 3 mutually exclusive method toggles
+3. **Papyrus Integration**: Extended native script declarations and MCM logic
+
+**UI Structure:**
+```
+[✓] Mute Game Music          ← Master toggle (controls availability)
+    [  ] Legacy (0010486c)   ← Method 1: Legacy testing code
+    [✓] Option A (MUSCombatBoss)  ← Method 2: Skyrim combat boss music
+    [  ] Option B (MUSSpecialDeath) ← Method 3: Special death music
+```
+
+**Behavior Rules:**
+- **Master OFF**: All 3 method toggles disabled (grayed out), INI = `false`
+- **Master ON**: Method toggles enabled, INI = selected method code
+- **Methods Mutually Exclusive**: Only one method can be active at a time
+- **State Memory**: When reactivating master toggle, remembers last selected method
+
+**Technical Implementation:**
+- **plugin.cpp**: 2 new native functions + Papyrus registration (31 total functions)
+- **OSoundtracks_NativeScript.psc**: Function declarations for Papyrus access
+- **OSoundtracks_McmScript.psc**: Complete 4-toggle logic with state management
+- **INI Integration**: Direct string values: `false`, `0010486c`, `MUSCombatBoss`, `MUSSpecialDeath`
+
+**Updated Locations:**
+- Plugin version: v16.3.0 → v17.2.0 (3 locations: log, SKSEPluginLoad, SKSEPlugin_Version)
+- Function count: 29 → 31 registered functions
+- About page version display updated
+
+---
+
+**Version 17.3.0: Complete UI Enhancement - Tooltips + Web Links**
+
+Comprehensive MCM UI overhaul with full tooltip coverage and integrated web links.
+
+**Key Changes:**
+1. **26 Tooltips**: Every MCM element now has descriptive help text on hover
+2. **9 Web Link Buttons**: Direct access to external resources with confirmation dialogs
+3. **Page Name Fix**: Corrected OnConfigOpen() to match OnPageReset() names
+4. **OpenURL Function**: Native Windows API integration via ShellExecuteA
+
+**UI Elements Enhanced:**
+- **7 Sliders**: Base, Menu, Specific, Effect, Position, TAG, SoundMenuKey volume controls
+- **8 Toggles**: Master Volume, Startup, Visible, Backup, Mute Game Music (4-toggle system)
+- **2 Menus**: SoundMenuKey mode, Author selection
+- **9 Buttons**: Web links + recommended MCM mods + Standalone Mode
+
+**New "Links" Section on About Page:**
+```
+Direct links:
+- John95ac Nexus Mods
+- Patreon
+- Ko-Fi
+- John95ac Web Advances
+- OSTR Documents (WIP)
+
+Recommended MCM links:
+- Jaxonz MCM Kicker SE
+- Menu Maid 2 - MCM manager
+- ConsoleUtilSSE
+```
+
+**Behavior Improvements:**
+- **Confirmation Dialogs**: All web links show confirmation before opening
+- **Personal Branding**: Buttons updated with "John95ac" identifier
+- **Detailed Explanations**: Tooltips rewritten with technical context
+- **WIP Indicators**: Effect, TAG, Standalone, and OSTR marked as work-in-progress
+
+**Technical Implementation:**
+- **plugin.cpp**: OpenURL() function, 32 registered functions (31→32)
+- **OSoundtracks_NativeScript.psc**: OpenURL declaration
+- **OSoundtracks_McmScript.psc**: 26 tooltips, 9 buttons, page names corrected
+- **Version Updates**: v17.2.0 → v17.3.0 (4 locations)
+
+**Tooltip Coverage Breakdown:**
+- Sliders: 7 tooltips (30%)
+- Toggles: 8 tooltips (35%)
+- Menus: 2 tooltips (9%)
+- Buttons: 9 tooltips (26%)
 
 ---
 
