@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DOOM PRISMA - FULL GAME</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#000;display:flex;flex-direction:column;align-items:center;
+       justify-content:center;height:100vh;overflow:hidden;font-family:monospace;
+       user-select:none}
+  #hud{color:#ffb700;font-size:14px;letter-spacing:3px;padding:6px 0;
+       width:960px;text-align:center;background:#111;border-bottom:1px solid #300}
+  #screen{display:flex;position:relative; width:960px; height:540px;}
+  canvas#game{
+      width:960px; height:540px;
+      display:block; image-rendering:pixelated; cursor:none;
+  }
+
+  #minimap{position:absolute;top:10px;right:10px;border:1px solid #400;background:rgba(0,0,0,0.7)}
+
+  #legend{
+      position:absolute;top:10px;left:10px;border:1px solid #400;background:rgba(0,0,0,0.85);
+      color:#ccc;font-size:12px;padding:10px;display:none;width:140px;line-height:1.6;
+  }
+  #legend h3{color:#ffb700;font-size:12px;margin-bottom:8px;text-align:center;letter-spacing:1px;border-bottom:1px solid #333;padding-bottom:4px}
+  .leg-row{display:flex;align-items:center;margin-bottom:4px}
+  .leg-box{width:10px;height:10px;margin-right:8px;border:1px solid #000}
+
+  #msg{position:absolute;bottom:40px;left:0;right:0;text-align:center;
+       color:#ffb700;font-size:16px;letter-spacing:2px;text-shadow:0 0 8px #ffb700;
+       pointer-events:none;opacity:0;transition:opacity 0.4s; font-weight:bold}
+
+  #keys {
+      display: flex; justify-content: center; gap: 30px; align-items: center;
+      background: #0a0a0a; border-top: 1px solid #222; padding: 12px 0;
+      color: #888; width: 960px; font-size: 13px;
+  }
+  kbd {
+      background: #333; color: #eee; padding: 3px 7px; border-radius: 4px;
+      border-bottom: 2px solid #000; font-family: monospace; font-weight: bold;
+      margin: 0 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  }
+  kbd.space { padding: 3px 16px; }
+</style>
+</head>
+<body>
+<div id="hud">DOOM PRISMA &bull; ROOM 1: ENTRANCE</div>
+<div id="screen">
+  <canvas id="game" width="320" height="180"></canvas>
+  <canvas id="minimap" width="112" height="112"></canvas>
+
+  <div id="legend">
+    <h3>MAP LEGEND</h3>
+    <div class="leg-row"><div class="leg-box" style="background:#0f0"></div>Player</div>
+    <div class="leg-row"><div class="leg-box" style="background:#ff00ff"></div>Key</div>
+    <div class="leg-row"><div class="leg-box" style="background:#ffb700"></div>Portal/Door</div>
+    <div class="leg-row"><div class="leg-box" style="background:#ff7800"></div>Enemy</div>
+    <div class="leg-row"><div class="leg-box" style="background:#A02020"></div>Red Wall</div>
+    <div class="leg-row"><div class="leg-box" style="background:#3030A0"></div>Blue Wall</div>
+    <div class="leg-row"><div class="leg-box" style="background:#306030"></div>Green Wall</div>
+    <div class="leg-row"><div class="leg-box" style="background:#706050"></div>Gray Wall</div>
+  </div>
+
+  <div id="msg"></div>
+</div>
+<div id="keys">
+  <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or <kbd>&uarr;</kbd><kbd>&darr;</kbd> Move</span>
+  <span><kbd>Q</kbd><kbd>E</kbd> or <kbd>&larr;</kbd><kbd>&rarr;</kbd> Rotate</span>
+  <span><kbd>M</kbd> Map</span>
+  <span><kbd class="space">SPACE</kbd> Legend</span>
+</div>
+
+<script>
+// --- 1. CONFIG & GLOBALS ---
+const W=320, H=180, HALF_H=H>>1; 
+const FOV=Math.PI/3, RAYS=W>>1, MAX_D=18;
+const MOVE=0.06, ROT=0.05, MARGIN=0.22;
+function getEnemySpeed(){return hasKey?(mapIdx===2?MOVE*2:MOVE):MOVE/3;}
+function getPlayerSpeed(){return hasKey?(mapIdx===2?MOVE*2:MOVE*1.5):MOVE;}
+const ZBuffer = new Float32Array(RAYS);
+
+let gameState = 'playing'; // 'playing', 'gameover', 'win'
+let winTime=null;
+let startTime=Date.now();
+let mapIdx=0;
+let keysInput={};
+let showMM=true, showLeg=false, flashA=0, lastTrans=0, msgTimer=0, nearPortal=false;
+let hasKey=false; 
+let player = { x:0, y:0, a:0 };
+
+const gc=document.getElementById('game');
+const gctx=gc.getContext('2d', {alpha: false});
+const mc=document.getElementById('minimap');
+const mctx=mc.getContext('2d');
+const hud=document.getElementById('hud');
+const msgEl=document.getElementById('msg');
+const legEl=document.getElementById('legend');
+const imgData=gctx.createImageData(W,H);
+const px=imgData.data;
+
+// --- 2. ASSETS & MAPS ---
+const WCOLOR = { 1:[160,110,55], 2:[55,55,140], 3:[140,35,35], 4:[40,110,60], 5:[100,85,70] };
+const TEXTURES = {};
+const texNames = { 1:'wall_yellow.webp', 2:'wall_blue.webp', 3:'wall_red.webp', 4:'wall_green.webp', 5:'wall_gray.webp' };
+for(let i=1; i<=5; i++) { TEXTURES[i] = new Image(); TEXTURES[i].src = texNames[i]; }
+
+// Las puertas/portales usan el valor 6 en el mapa. Heredan el color/textura del muro amarillo (1)
+TEXTURES[6] = TEXTURES[1];
+WCOLOR[6] = WCOLOR[1];
+
+const catImg = new Image(); catImg.src = 'cat normal.webp';
+const keyImg = new Image(); keyImg.src = 'key.webp';
+
+let ITEMS = [];
+let ENEMIES = [];
+
+// LOS BLOQUES 6 SON PUERTAS Y PORTALES. DESAPARECEN Y SE VUELVEN CAMINABLES SOLO CUANDO TIENES LA LLAVE.
+const MAPS=[
+  {
+    name:"ROOM 1: ENTRANCE", w:16, h:16,
+    data:[
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,2,2,0,0,1,0,0,2,2,0,0,0,1,
+      1,0,0,2,0,0,0,0,0,0,0,2,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,1,1,1,6,1,1,1,1,1,6,1,1,1,1,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,3,3,3,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,3,0,3,0,0,0,0,0,0,1,
+      1,0,0,2,0,0,3,0,3,0,0,2,0,0,0,1,
+      1,0,0,2,0,0,0,0,0,0,0,2,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,1,1,1,1,1,1,1,6,1,1,1,1,1,1,1,
+    ],
+    spawn:{x:2.5,y:2.5,a:0},
+    keyPos:{x:13.5,y:3.5},
+    enemySpawns: [{x:13.5, y:5.5}], 
+    exits:[ {gx:8, gy:15, next:1, sx:4.5, sy:2.5, sa:Math.PI/2} ]
+  },
+  {
+    name:"ROOM 2: THE CRYPT", w:16, h:16,
+    data:[
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,0,0,0,1,0,0,0,0,0,0,1,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,3,0,3,0,3,0,3,0,3,0,0,0,1,
+      1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,
+      1,0,0,3,0,3,0,3,0,3,0,3,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,1,1,6,1,1,1,1,1,1,1,1,6,1,1,1,
+      1,0,0,0,0,0,0,5,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,2,2,2,0,0,5,0,0,2,2,2,0,0,1,
+      1,0,2,0,2,0,0,0,0,0,2,0,2,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,1,1,1,6,1,1,1,1,1,1,1,1,1,1,1,
+    ],
+    spawn:{x:4.5,y:2.5,a:Math.PI/2},
+    keyPos:{x:13.5,y:2.5},
+    enemySpawns: [{x:1.5, y:6.5},{x:7.5, y:12.5}], 
+    exits:[ {gx:4, gy:15, next:2, sx:8.5, sy:1.5, sa:Math.PI/2} ]
+  },
+  {
+    name:"ROOM 3: THE ALTAR", w:16, h:16,
+    data:[
+      1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,4,4,0,0,0,0,0,0,0,0,4,4,0,1,
+      1,0,4,0,0,0,0,0,0,0,0,0,0,4,0,1,
+      1,0,0,0,0,5,5,0,0,5,5,0,0,0,0,1,
+      1,0,0,0,0,5,0,0,0,0,5,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,3,3,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,3,3,0,0,0,0,0,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,0,0,0,0,5,0,0,0,0,5,0,0,0,0,1,
+      1,0,0,0,0,5,5,0,0,5,5,0,0,0,0,1,
+      1,0,4,0,0,0,0,0,0,0,0,0,0,4,0,1,
+      1,0,4,4,0,0,0,0,0,0,0,0,4,4,0,1,
+      1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,
+      1,1,1,1,1,1,1,1,6,1,1,1,1,1,1,1,
+    ],
+    spawn:{x:8.5,y:1.5,a:Math.PI/2},
+    keyPos:{x:8.5,y:13.5},
+    enemySpawns: [{x:1.5, y:13.5}, {x:14.5, y:13.5}], 
+    exits:[ {gx:8,gy:15, next:'win'} ] 
+  }
+];
+
+// --- 3. ENGINE MATH & LOGIC ---
+document.addEventListener('keydown',e=>{ 
+  keysInput[e.key.toLowerCase()]=true; 
+  if(e.key.toLowerCase()==='m') showMM=!showMM; 
+  if(e.code==='Space') { showLeg=!showLeg; legEl.style.display=showLeg?'block':'none'; }
+  e.preventDefault();
+});
+document.addEventListener('keyup',e=>{ keysInput[e.key.toLowerCase()]=false; });
+
+function cell(gx,gy){
+  const m=MAPS[mapIdx];
+  if(gx<0||gy<0||gx>=m.w||gy>=m.h) return 1;
+  return m.data[gy*m.w+gx];
+}
+
+function isWalkable(cx, cy) {
+  const v = cell(cx, cy);
+  if (v === 6) return hasKey; // Solo es caminable si tienes la llave
+  return v === 0;
+}
+
+function isEnemyWalkable(cx, cy) {
+  const v = cell(cx, cy);
+  if (v === 6) return hasKey; // Enemigos también pueden cruzar puertas abiertas
+  return v === 0;
+}
+
+function canGo(nx,ny){
+  return isWalkable(Math.floor(nx+MARGIN), Math.floor(ny+MARGIN)) &&
+         isWalkable(Math.floor(nx-MARGIN), Math.floor(ny+MARGIN)) &&
+         isWalkable(Math.floor(nx+MARGIN), Math.floor(ny-MARGIN)) &&
+         isWalkable(Math.floor(nx-MARGIN), Math.floor(ny-MARGIN));
+}
+
+function showMsg(txt,ms=2000){
+  msgEl.textContent=txt; msgEl.style.opacity='1';
+  clearTimeout(msgTimer); msgTimer=setTimeout(()=>{ msgEl.style.opacity='0'; },ms);
+}
+
+function loadRoom(idx, px, py, pa) {
+  mapIdx = idx;
+  player.x = px; player.y = py; player.a = pa;
+  hasKey = false;
+  gameState = 'playing';
+  if(idx===0)startTime=Date.now();
+
+  ITEMS = [];
+  ENEMIES = [];
+
+  const m = MAPS[idx];
+  ITEMS.push({ x: m.keyPos.x, y: m.keyPos.y, scale: 0.5, img: keyImg, isKey: true, float: true });
+
+  for(let es of m.enemySpawns) {
+     ENEMIES.push({ x: es.x, y: es.y, scale: 0.7, img: catImg, isEnemy: true });
+  }
+
+  hud.textContent = 'DOOM PRISMA \u2022 ' + m.name;
+  showMsg('[ ' + m.name + ' ]');
+  flashA = 0.85; 
+}
+
+function castRay(ox,oy,angle){
+  const cosA=Math.cos(angle), sinA=Math.sin(angle);
+  let mx=Math.floor(ox), my=Math.floor(oy);
+  const dDX=Math.abs(1/(cosA||1e-10)), dDY=Math.abs(1/(sinA||1e-10));
+  let sX,sY,stepX,stepY;
+
+  if(cosA<0){stepX=-1; sX=(ox-mx)*dDX;} else {stepX= 1; sX=(mx+1-ox)*dDX;}
+  if(sinA<0){stepY=-1; sY=(oy-my)*dDY;} else {stepY= 1; sY=(my+1-oy)*dDY;}
+
+  let wType=1, side=0, depth=0;
+  while(depth++<MAX_D){
+    if(sX<sY){sX+=dDX; mx+=stepX; side=0;} else {sY+=dDY; my+=stepY; side=1;}
+    const v=cell(mx,my);
+    if(v>0){
+      if (v === 6 && hasKey) continue; // Si tienes la llave, la puerta es invisible para el rayo
+      wType=v; break;
+    }
+  }
+  const perp=side===0 ? sX-dDX : sY-dDY;
+  let wallX = side===0 ? oy+perp*sinA : ox+perp*cosA;
+  wallX -= Math.floor(wallX);
+  return {dist:Math.max(perp,0.05), side, wType, wallX, cosA, sinA};
+}
+
+// --- 4. RENDERER ---
+function render(){
+  for(let y=0;y<H;y++){
+    const fl=y>HALF_H, base=fl?Math.floor(15+(y-HALF_H)/HALF_H*30):Math.floor(5+y/HALF_H*10);
+    const off=y*W*4;
+    for(let x=0;x<W;x++){
+      const i=off+x*4;
+      px[i]=fl?base:Math.floor(base*0.4); px[i+1]=fl?base:Math.floor(base*0.4);
+      px[i+2]=fl?base:Math.floor(base*0.7); px[i+3]=255;
+    }
+  }
+  gctx.putImageData(imgData,0,0);
+
+  const startA=player.a-FOV*0.5, stepA=FOV/RAYS;
+  for(let i=0;i<RAYS;i++){
+    const ra=startA+i*stepA, ray=castRay(player.x,player.y,ra);
+    const d=ray.dist*Math.cos(ra-player.a);
+    ZBuffer[i]=d;
+
+    const safe=Math.max(d,0.05), wh=Math.min(H,Math.floor(H/safe));
+    const top=Math.max(0,(H-wh)>>1), h=Math.min(H,top+wh)-top, x0=i<<1;
+    const tex = TEXTURES[ray.wType];
+
+    if (tex && tex.complete && tex.naturalWidth > 0) {
+        let texX = Math.floor(ray.wallX * tex.naturalWidth);
+        if(ray.side === 0 && ray.cosA > 0) texX = tex.naturalWidth - texX - 1;
+        if(ray.side === 1 && ray.sinA < 0) texX = tex.naturalWidth - texX - 1;
+
+        gctx.drawImage(tex, texX, 0, 1, tex.naturalHeight, x0, top, 2, h);
+        const distFade = 1 - (d / MAX_D), totalFade = Math.max(0, Math.min(1, (ray.side===1?0.35:0) + (1-distFade)));
+        if (totalFade > 0) { gctx.fillStyle = `rgba(0,0,0,${totalFade})`; gctx.fillRect(x0, top, 2, h); }
+    } else {
+        const [r,g,b]=WCOLOR[ray.wType]||WCOLOR[1], fade=Math.max(0,1-d/MAX_D);
+        const shade=ray.side===1?0.55:1.0;
+        gctx.fillStyle = `rgb(${Math.floor(r*shade*fade)},${Math.floor(g*shade*fade)},${Math.floor(b*shade*fade)})`;
+        gctx.fillRect(x0, top, 2, h);
+    }
+  }
+
+  let allSprites = [...ITEMS, ...ENEMIES];
+  let visibleSprites = [];
+  for(let s of allSprites){
+    let dx = s.x - player.x, dy = s.y - player.y;
+    let cos = Math.cos(player.a), sin = Math.sin(player.a);
+    let depth = dx * cos + dy * sin;
+    let horiz = -dx * sin + dy * cos;
+
+    if(depth > 0.1) {
+      let sx = Math.floor((W / 2) * (1 + horiz / (depth * Math.tan(FOV/2))));
+      let size = Math.abs(Math.floor(H / depth)); 
+      let sSize = Math.floor(size * s.scale);  
+
+      let y_off = Math.floor(H / 2) - Math.floor(sSize / 2);
+
+      if(s.float) {
+          y_off += Math.sin(Date.now() * 0.0015) * (size * 0.05); 
+      } else {
+          y_off += Math.floor(size / 2) - Math.floor(sSize / 2); 
+      }
+
+      visibleSprites.push({x: sx, y: y_off, size: sSize, dist: depth, obj: s});
+    }
+  }
+
+  visibleSprites.sort((a,b) => b.dist - a.dist);
+  for(let s of visibleSprites){
+    let half = s.size >> 1, startX = Math.max(0, s.x - half), endX = Math.min(W, s.x + half);
+    let imgReady = s.obj.img && s.obj.img.complete && s.obj.img.naturalWidth > 0;
+
+    for(let stripe = startX; stripe < endX; stripe++){
+      if(s.dist < ZBuffer[stripe >> 1]) {
+        if (imgReady) {
+            let texX = Math.floor(((stripe - (s.x - half)) / s.size) * s.obj.img.naturalWidth);
+            gctx.drawImage(s.obj.img, texX, 0, 1, s.obj.img.naturalHeight, stripe, s.y, 1, s.size);
+        } else if (s.obj.isKey) {
+            gctx.fillStyle = `#ff00ff`;
+            gctx.fillRect(stripe, s.y, 1, s.size);
+        }
+        if (!s.obj.isKey) {
+            const fade = Math.max(0, 1 - s.dist/MAX_D);
+            if (fade < 1.0) { gctx.fillStyle = `rgba(0,0,0,${1 - fade})`; gctx.fillRect(stripe, s.y, 1, s.size); }
+        }
+      }
+    }
+  }
+
+  if(flashA>0 && gameState === 'playing'){
+    gctx.fillStyle=`rgba(255,215,0,${flashA})`;
+    gctx.fillRect(0,0,W,H);
+    flashA=Math.max(0,flashA-0.05);
+  }
+
+  // ESTADOS DE PANTALLA
+  if (gameState === 'gameover') {
+    gctx.fillStyle = 'rgba(200, 0, 0, 0.4)';
+    gctx.fillRect(0, 0, W, H);
+
+    gctx.fillStyle = '#fff';
+    gctx.font = 'bold 32px monospace';
+    gctx.textAlign = 'center';
+    gctx.fillText('GAME OVER', W/2, H/2 - 10);
+    gctx.font = '14px monospace';
+    gctx.fillText('PRESS R TO RESTART', W/2, H/2 + 25);
+  } else if (gameState === 'win') {
+    gctx.fillStyle = 'rgba(0,0,0,0.7)';
+    gctx.fillRect(0, 0, W, H);
+    gctx.fillStyle = '#ffb700';
+    gctx.font = 'bold 36px monospace';
+    gctx.textAlign = 'center';
+    gctx.fillText('YOU WIN', W/2, H/2 - 20);
+    var el=winTime, mn=Math.floor(el/60000), sc=Math.floor((el%60000)/1000);
+    gctx.font = '18px monospace';
+    gctx.fillText('TIME: '+String(mn).padStart(2,'0')+':'+String(sc).padStart(2,'0'), W/2, H/2+10);
+    gctx.font = '14px monospace';
+    gctx.fillText('PRESS R TO RESTART', W/2, H/2 + 35);
+  } else {
+    gctx.strokeStyle='rgba(255,255,255,0.7)'; gctx.lineWidth=1;
+    gctx.beginPath(); gctx.moveTo(W/2-6,H/2); gctx.lineTo(W/2+6,H/2);
+    gctx.moveTo(W/2,H/2-6); gctx.lineTo(W/2,H/2+6); gctx.stroke();
+  }
+}
+
+function renderMM(){
+  mc.style.display=showMM?'block':'none'; if(!showMM) return;
+  const map=MAPS[mapIdx], cs=7;
+  mctx.fillStyle='#000'; mctx.fillRect(0,0,112,112);
+
+  for(let y=0;y<map.h;y++){
+    for(let x=0;x<map.w;x++){
+      const v=map.data[y*map.w+x]; if(!v) continue;
+      mctx.fillStyle=v===2?'#3030A0':v===3?'#A02020':v===4?'#306030':v===5?'#706050':v===6?'#ffb700':'#7A5A1A';
+      mctx.fillRect(x*cs,y*cs,cs-1,cs-1);
+    }
+  }
+
+  for(const s of ITEMS){
+    mctx.fillStyle = '#ff00ff'; mctx.fillRect(s.x*cs-1, s.y*cs-1, 2, 2);
+  }
+  for(const s of ENEMIES){
+    mctx.fillStyle = '#ff7800'; mctx.fillRect(s.x*cs-1, s.y*cs-1, 2, 2);
+  }
+
+  const ppx=player.x*cs, ppy=player.y*cs;
+  mctx.fillStyle='#0f0'; mctx.beginPath(); mctx.arc(ppx,ppy,3,0,Math.PI*2); mctx.fill();
+  mctx.strokeStyle='#0f0'; mctx.lineWidth=1.5; mctx.beginPath();
+  mctx.moveTo(ppx,ppy); mctx.lineTo(ppx+Math.cos(player.a)*9, ppy+Math.sin(player.a)*9); mctx.stroke();
+}
+
+// --- 5. GAME UPDATE ---
+function update(){
+  if (gameState !== 'playing') {
+    if (keysInput['r']) loadRoom(0, MAPS[0].spawn.x, MAPS[0].spawn.y, MAPS[0].spawn.a);
+    return; 
+  }
+
+  const cos=Math.cos(player.a), sin=Math.sin(player.a);
+
+  if(keysInput['w']||keysInput['arrowup'])   { const nx=player.x+cos*getPlayerSpeed(), ny=player.y+sin*getPlayerSpeed(); if(canGo(nx,player.y)) player.x=nx; if(canGo(player.x,ny)) player.y=ny; }
+  if(keysInput['s']||keysInput['arrowdown']) { const nx=player.x-cos*getPlayerSpeed(), ny=player.y-sin*getPlayerSpeed(); if(canGo(nx,player.y)) player.x=nx; if(canGo(player.x,ny)) player.y=ny; }
+  if(keysInput['a']) { const nx=player.x+sin*getPlayerSpeed(), ny=player.y-cos*getPlayerSpeed(); if(canGo(nx,player.y)) player.x=nx; if(canGo(player.x,ny)) player.y=ny; }
+  if(keysInput['d']) { const nx=player.x-sin*getPlayerSpeed(), ny=player.y+cos*getPlayerSpeed(); if(canGo(nx,player.y)) player.x=nx; if(canGo(player.x,ny)) player.y=ny; }
+  if(keysInput['q']||keysInput['arrowleft'])  player.a-=ROT;
+  if(keysInput['e']||keysInput['arrowright']) player.a+=ROT;
+
+  for (let i = ITEMS.length - 1; i >= 0; i--) {
+      let s = ITEMS[i];
+      if (s.isKey && Math.hypot(player.x - s.x, player.y - s.y) < 0.8) {
+          hasKey = true;
+          ITEMS.splice(i, 1);
+          showMsg('KEY ACQUIRED!', 2000);
+          setTimeout(function(){showMsg('ENEMIES ENRAGED!', 2000);}, 1500);
+      }
+  }
+
+  for (let enemy of ENEMIES) {
+    let dx = player.x - enemy.x;
+    let dy = player.y - enemy.y;
+    let dist = Math.hypot(dx, dy);
+
+    if (dist < 0.5) {
+      gameState = 'gameover';
+    } else if (dist > 0) {
+      let moveX = (dx / dist) * getEnemySpeed();
+      let moveY = (dy / dist) * getEnemySpeed();
+
+      let checkX = enemy.x + moveX + Math.sign(moveX) * 0.3;
+      let checkY = enemy.y + moveY + Math.sign(moveY) * 0.3;
+
+      if (isEnemyWalkable(Math.floor(checkX), Math.floor(enemy.y))) {
+        enemy.x += moveX;
+      }
+      if (isEnemyWalkable(Math.floor(enemy.x), Math.floor(checkY))) {
+        enemy.y += moveY;
+      }
+    }
+  }
+
+  const now=Date.now(), gx=Math.floor(player.x), gy=Math.floor(player.y);
+
+  // Lógica de Teletransporte al pisar un portal final
+  if(hasKey){
+    for(const ex of MAPS[mapIdx].exits){
+      if(gx===ex.gx && gy===ex.gy){
+        lastTrans=now; 
+        if (ex.next === 'win') {
+            gameState = 'win';
+            winTime=Date.now()-startTime;
+        } else {
+            loadRoom(ex.next, ex.sx, ex.sy, ex.sa);
+        }
+        return;
+      }
+    }
+  }
+
+  // Notificación de puerta
+  let nearDoor=false;
+  let checkDirs = [[0,1],[1,0],[0,-1],[-1,0],[0,0]];
+  for(let d of checkDirs) {
+      if (cell(gx+d[0], gy+d[1]) === 6) nearDoor = true;
+  }
+  if(nearDoor && !nearPortal){
+      nearPortal=true;
+      msgEl.textContent = hasKey ? '[ DOOR UNLOCKED ]' : '[ LOCKED - FIND THE KEY ]';
+      msgEl.style.opacity='1'; clearTimeout(msgTimer);
+  } else if(!nearDoor && nearPortal){ 
+      nearPortal=false; msgEl.style.opacity='0'; 
+  }
+}
+
+const FPS_MS = 1000 / 30; let lastTime = 0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  if (!ts) ts = 0; if (ts - lastTime < FPS_MS) return; 
+  lastTime = ts; update(); render(); renderMM();
+}
+
+mc.width = 112; mc.height = 112; 
+loadRoom(0, MAPS[0].spawn.x, MAPS[0].spawn.y, MAPS[0].spawn.a);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
