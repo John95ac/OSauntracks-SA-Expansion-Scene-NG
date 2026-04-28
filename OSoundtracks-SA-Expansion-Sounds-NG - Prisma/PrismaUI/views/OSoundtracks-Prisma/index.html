@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>OSoundtracks Prisma</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    
+    <!-- MAIN UI -->
+    <div class="hub hidden" id="hub">
+        <div class="head" id="dragHead" title="Drag to move">
+            <img src="Assets/Images/013.gif" class="gif" alt="">
+            <span class="title">OSoundtracks Prisma</span>
+            <span class="version" style="margin-left: auto; margin-right: 10px;">v6.1.0</span>
+        </div>
+
+        
+        <div class="hub-tabs">
+            <button type="button" class="hub-tab active" data-target="tab-main">❤️ Main</button>
+            <button type="button" class="hub-tab" data-target="tab-style">🎨 Style</button>
+            <button type="button" class="hub-tab" data-target="tab-impact">💥 Impact</button>
+<button type="button" class="hub-tab" data-target="tab-config">⚙️ Config</button>
+            
+
+        </div>
+        
+        
+        
+        
+        <div id="tab-main" class="hub-tab-content active">
+            <button type="button" class="btn-main btn-gold" id="btn9Gold">
+                <img src="Assets/Data/oblivion-4384570_1280.png" class="btn-icon" alt="gold">
+                9 Gold
+            </button>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;"><span class="section-title">Toggle Panels</span><button type="button" class="btn-panel btn-default-config" id="btnDefaultConfig">⚙ Default Config</button></div>
+            <div class="panel-buttons" style="margin-top: 5px;">
+                <button type="button" class="btn-panel" id="btnToggleGif">🐱 GIF</button>
+                <button type="button" class="btn-panel" id="btnToggleVideo">🎬 Video</button>
+                <button type="button" class="btn-panel" id="btnToggleLogs">📜 Logs</button>
+                <button type="button" class="btn-panel" id="btnToggleLive">❤️ Live</button>
+            </div>
+
+            
+            <div class="osoundtracks-config" style="margin-top: 15px;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px;">
+                    <span class="section-title" style="color: #ffcc00;">🎵 OSoundtracks Config</span>
+                    <span style="font-size: 10px; color: #aaa;">notifications</span>
+                    <input type="checkbox" id="cfgToastEnabled" data-ini="Toast" checked style="cursor: pointer;">
+                </div>
+                
+                
+                <div class="config-submenus" style="display: flex; gap: 5px; justify-content: center; margin-bottom: 10px;">
+                    <button type="button" class="btn-panel config-submenu-btn active" data-config="volumes">Volumes</button>
+                    <button type="button" class="btn-panel config-submenu-btn" data-config="visibility">Visibility</button>
+                    <button type="button" class="btn-panel config-submenu-btn" data-config="albums">Albums</button>
+                    <button type="button" class="btn-panel config-submenu-btn" data-config="options">Experimental</button>
+                </div>
+                
+                
+                <div class="config-content" id="configVolumes">
+                    
+                    <div class="config-row config-row-cyan">
+                        <span class="config-label">🎶 SoundMenu:</span>
+                        <input type="range" class="config-slider" id="cfgSoundMenuKeyVolume" min="0" max="200" value="10" data-ini="SoundMenuKeyVolume">
+                        <span class="config-value" id="cfgSoundMenuKeyVolumeTxt">10%</span>
+                    </div>
+                    
+                    <div class="config-row config-row-cyan">
+                        <span class="config-label">🎵 MenuAliasg:</span>
+                        <input type="range" class="config-slider" id="cfgMenuVolume" min="0" max="200" value="80" data-ini="MenuVolume">
+                        <span class="config-value" id="cfgMenuVolumeTxt">80%</span>
+                    </div>
+                    
+                    <div class="config-row config-row-cyan">
+                        <span class="config-label">🔊 AnimaMusic:</span>
+                        <input type="range" class="config-slider" id="cfgBaseVolume" min="0" max="200" value="120" data-ini="BaseVolume">
+                        <span class="config-value" id="cfgBaseVolumeTxt">120%</span>
+                    </div>
+                    
+                    <div class="config-row config-row-cyan">
+                        <span class="config-label">🎯 AnimaEffect:</span>
+                        <input type="range" class="config-slider" id="cfgSpecificVolume" min="0" max="200" value="120" data-ini="SpecificVolume">
+                        <span class="config-value" id="cfgSpecificVolumeTxt">120%</span>
+                    </div>
+                    
+                    <div class="config-row config-row-cyan">
+                        <span class="config-label">📍 Position:</span>
+                        <input type="range" class="config-slider" id="cfgPositionVolume" min="0" max="200" value="130" data-ini="PositionVolume">
+                        <span class="config-value" id="cfgPositionVolumeTxt">130%</span>
+                    </div>
+                    
+                    <div class="config-row config-row-highlight">
+                        <span class="config-label">🏷️ TAG:</span>
+                        <input type="range" class="config-slider" id="cfgTAGVolume" min="0" max="200" value="120" data-ini="TAGVolume">
+                        <span class="config-value" id="cfgTAGVolumeTxt">120%</span>
+                    </div>
+                    
+                    <div class="config-row config-row-highlight">
+                        <span class="config-label">💥 Effect:</span>
+                        <input type="range" class="config-slider" id="cfgEffectVolume" min="0" max="200" value="40" data-ini="EffectVolume">
+                        <span class="config-value" id="cfgEffectVolumeTxt">40%</span>
+                    </div>
+                    
+                    <div class="config-row" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(100,100,100,0.3);">
+                        <span class="config-label">🎚️ Master:</span>
+                        <button type="button" class="btn-panel config-toggle active" id="cfgMasterVolumeEnabled" data-ini="MasterVolumeEnabled">Enabled</button>
+                    </div>
+                    
+                    <div class="config-row">
+                        <span class="config-label">📢 Notifications:</span>
+                        <button type="button" class="btn-panel config-toggle active" id="cfgTopNotifications" data-ini="Visible">Visible</button>
+                    </div>
+                    
+                    <div class="config-row">
+                        <span class="config-label"><button type="button" id="btnSecretCat" style="background:transparent;border:none;padding:0;cursor:pointer;width:16px;height:16px;vertical-align:middle;"><img src="Assets/Images/013.gif" style="width:16px;height:16px;vertical-align:middle;"></button> Startup:</span>
+                        <button type="button" class="btn-panel config-toggle active" id="cfgStartupSound" data-ini="Startup">Enabled</button>
+                    </div>
+                </div>
+                
+                
+                <div class="config-content hidden" id="configAlbums">
+                    
+                    <div class="config-row">
+                        <span class="config-label">🎵 Mode:</span>
+                        <select class="config-select" id="cfgSoundMenuKey" data-ini="SoundMenuKey">
+                            <option value="false">Disabled</option>
+                            <option value="All_Order">All (Order)</option>
+                            <option value="All_Random">All (Random)</option>
+                            <option value="Author_Order">Author (Order)</option>
+                            <option value="Author_Random">Author (Random)</option>
+                        </select>
+                    </div>
+                    <div style="font-size: 10px; color: #666; margin-bottom: 8px; margin-top: 2px;">
+                        Play mode for background music during OStim.
+                    </div>
+                    
+                    <div class="config-row">
+                        <span class="config-label">👤 Author:</span>
+                        <select class="config-select" id="cfgAuthor" data-ini="Author">
+                            
+                        </select>
+                    </div>
+                    <div style="font-size: 10px; color: #666; margin-bottom: 8px; margin-top: 2px;">
+                        Select author for Author_Order or Author_Random modes.
+                    </div>
+                </div>
+
+                
+                <div class="config-content hidden" id="configVisibility">
+                    <div class="config-section">
+                        <div class="config-label">Panel Live - Now Playing Mode</div>
+                        <div class="visibility-options">
+                            <label class="visibility-option">
+                                <input type="radio" name="nowPlayingMode" value="disabled">
+                                <span>Disabled</span>
+                                <small>Never appears automatically</small>
+                            </label>
+                            <label class="visibility-option">
+                                <input type="radio" name="nowPlayingMode" value="timed">
+                                <span>Timed</span>
+                                <small>Shows X seconds per new track</small>
+                            </label>
+                            <div class="timed-seconds-row" id="timedSecondsRow">
+                                <label>Seconds:</label>
+                                <input type="number" id="nowPlayingSeconds" min="3" max="120" value="10">
+                            </div>
+                            <label class="visibility-option">
+                                <input type="radio" name="nowPlayingMode" value="always">
+                                <span>Always</span>
+                                <small>Visible while music is playing</small>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="config-section">
+                        <div class="config-label">Player GIF Button</div>
+                        <div class="gif-selector">
+                            <label class="gif-option" data-gif="013.gif">
+                                <img src="Assets/Images/013.gif" alt="Cat">
+                                <span>Cat</span>
+                            </label>
+                            <label class="gif-option" data-gif="agp_studios-audio-22816.gif">
+                                <img src="Assets/Images/agp_studios-audio-22816.gif" alt="Audio">
+                                <span>Audio</span>
+                            </label>
+                            <label class="gif-option" data-gif="pikura-heart-20751.gif">
+                                <img src="Assets/Images/pikura-heart-20751.gif" alt="Heart">
+                                <span>Heart</span>
+                            </label>
+                            <label class="gif-option" data-gif="viaductk-music-7683.gif">
+                                <img src="Assets/Images/viaductk-music-7683.gif" alt="Vinyl">
+                                <span>Vinyl</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div class="config-content hidden" id="configOptions">
+                    
+                    <div class="config-row">
+                        <span class="config-label">🎮 Skyrim Audio:</span>
+                        <select class="config-select" id="cfgSkyrimAudio" data-ini="MuteGameMusicDuringOStim">
+                            <option value="false">Disabled</option>
+                            <option value="MUSCombatBoss">Option A (Recommended)</option>
+                            <option value="MUSSpecialDeath">Option B</option>
+                        </select>
+                    </div>
+                    <div style="font-size: 10px; color: #666; margin-bottom: 8px; margin-top: 2px;">
+                        Mute Skyrim background music during OStim.<br>
+                        <strong>false:</strong> Disable completely<br>
+                        <strong>MUSCombatBoss:</strong> Option A - works in most versions<br>
+                        <strong>MUSSpecialDeath:</strong> Option B - low notes, subtle transition
+                    </div>
+                    
+                    
+                    <div style="margin-top: 12px; padding: 8px; background: rgba(139, 69, 19, 0.2); border: 1px solid rgba(205, 92, 92, 0.3); border-radius: 6px; text-align: left;">
+                        <div style="font-size: 11px; color: #ff6b6b; font-weight: bold; margin-bottom: 6px;">⚠️ WARNING - EXPERIMENTAL FEATURE</div>
+                        <div style="font-size: 10px; color: #c6c6c6; line-height: 1.4;">
+                            May cause CTD on OStim start. No direct SKSE method to disable Skyrim's background music; this workaround works on my system. <strong style="color: #ffcc00;">Options:</strong> <span style="color: #00CED1;">Disabled (safe) or MUSCombatBoss/MUSSpecialDeath (works for 98% of players, but may cause CTDs for some)</span>. <strong style="color: #ffcc00;">If experiencing crashes:</strong> Disable this feature and lower music volume via in-game settings.<br>
+                            <span style="color: #4CAF50;">After searching the internet for a long time, I'm working on a new method to disable all background music that works across all Skyrim versions. I hope to have this new method available soon and be able to use it in several projects.</span>
+                        </div>
+                        <div style="text-align: center; margin-top: 4px;">
+                            <img src="Assets/Images/013.gif" alt="Cat" style="width: 36px; height: 36px; image-rendering: pixelated;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        
+        
+        
+        <div id="tab-style" class="hub-tab-content">
+            
+            
+            <div class="color-section" style="justify-content: center;">
+                <span>🎨 Theme:</span>
+                <div class="color-buttons">
+                    <button type="button" class="color-btn active" data-theme="default" title="Lead/Gray">⚫</button>
+                    <button type="button" class="color-btn" data-theme="gold" title="Gold">🥇</button>
+                    <button type="button" class="color-btn" data-theme="dark" title="Dark">🌑</button>
+                    <button type="button" class="color-btn" data-theme="blood" title="Blood">🩸</button>
+                    <button type="button" class="color-btn" data-theme="nature" title="Nature">🌿</button>
+                </div>
+            </div>
+
+            
+            <div class="transparency-section">
+                <span>🌫️ Opacity:</span>
+                <input type="range" id="globalOpacity" min="20" max="100" value="97">
+                <span id="opacityTxt">97%</span>
+            </div>
+
+            
+            <div class="live-bg-section" style="text-align: center;">
+                <span class="section-title">Live Panel Background:</span>
+                <div class="bg-selector" style="justify-content: center;">
+                    <button type="button" class="bg-btn active" data-bg="default" title="Default">[ ]</button>
+                    <button type="button" class="bg-btn" data-bg="frame-v1" title="Frame v1">[1]</button>
+                    <button type="button" class="bg-btn" data-bg="glass-bg" title="Crystalline Glass">[G]</button>
+                </div>
+            </div>
+
+            
+            <div class="panel-size-section">
+                <span class="section-title">Resize Panels:</span>
+                <div class="panel-size-grid">
+                    <div class="size-item">
+                        <span>🏠 Hub:</span>
+                        <button type="button" class="sz-btn" id="btnSizeDown">−</button>
+                        <span id="size-txt">100%</span>
+                        <button type="button" class="sz-btn" id="btnSizeUp">+</button>
+                    </div>
+                    <div class="size-item">
+                        <span>🐱 GIF:</span>
+                        <button type="button" class="sz-btn" id="btnGifSizeDown">−</button>
+                        <span id="gifSizeTxt">100%</span>
+                        <button type="button" class="sz-btn" id="btnGifSizeUp">+</button>
+                    </div>
+                    <div class="size-item">
+                        <span>🎬 Video:</span>
+                        <button type="button" class="sz-btn" id="btnVideoSizeDown">−</button>
+                        <span id="videoSizeTxt">100%</span>
+                        <button type="button" class="sz-btn" id="btnVideoSizeUp">+</button>
+                    </div>
+                    <div class="size-item">
+                        <span>📜 Logs:</span>
+                        <button type="button" class="sz-btn" id="btnLogsSizeDown">−</button>
+                        <span id="logsSizeTxt">100%</span>
+                        <button type="button" class="sz-btn" id="btnLogsSizeUp">+</button>
+                    </div>
+                    <div class="size-item" style="grid-column: span 2;">
+                        <span>❤️ Live:</span>
+                        <button type="button" class="sz-btn" id="btnLiveSizeDown">−</button>
+                        <span id="liveSizeTxt">100%</span>
+                        <button type="button" class="sz-btn" id="btnLiveSizeUp">+</button>
+                    </div>
+                    <div class="size-item">
+                        <span>📋 Menu Tracking:</span>
+                        <button type="button" class="sz-btn" id="btnMenusSizeDown">−</button>
+                        <span id="menusSizeTxt">100%</span>
+                        <button type="button" class="sz-btn" id="btnMenusSizeUp">+</button>
+                    </div>
+                    <div class="size-item">
+                        <span>⚙️ Items Config:</span>
+                        <button type="button" class="sz-btn" id="btnItemsSizeDown">−</button>
+                        <span id="itemsSizeTxt">100%</span>
+                        <button type="button" class="sz-btn" id="btnItemsSizeUp">+</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="generator-section" style="margin-top: 5px; padding-top: 5px; padding-bottom: 5px; border-top: 1px solid rgba(100,100,100,0.3); border-bottom: 1px solid rgba(100,100,100,0.3);">
+                <span class="section-title" style="text-align: center; display: block; margin-bottom: 10px;">🎵 OSoundtracks SA Generator Packs</span>
+                <div class="generator-desc" style="text-align: center; color: #aaa; font-size: 11px; padding: 5px 15px;">
+                    If you want to create your own sound packs press the Generator button. <span style="color: #4ade80; font-size: 10px;">Thanks to all betatesters.</span>
+                </div>
+                <div style="text-align: center; margin-top: 10px;">
+                    <button type="button" class="btn-main btn-generator-green" id="btnOpenGenerator">🎵 OSoundtracks SA Generator</button>
+                </div>
+            </div>
+            
+            <div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid rgba(100,100,100,0.3); text-align: center;">
+                <button type="button" class="btn-main btn-gold" id="btnOpenYouTube">🎷 Jazz Life</button>
+            </div>
+        </div>
+
+        
+        
+        
+        <div id="tab-impact" class="hub-tab-content">
+            <span class="section-title" style="text-align: center; margin-bottom: 10px;">💥 Frame Impact System</span>
+            <p style="text-align: center; color: #888; font-size: 10px; margin-bottom: 15px;">Press a button to trigger impact effect</p>
+            
+            <div class="impact-buttons">
+                <button type="button" class="impact-btn impact-btn-boom" id="btnImpactBoom">💥 BOOM</button>
+                <button type="button" class="impact-btn impact-btn-blood" id="btnImpactBlood">🩸 BLOOD</button>
+                <button type="button" class="impact-btn impact-btn-parry" id="btnImpactParry">⚔️ PARRY</button>
+            </div>
+            
+            <div class="status" style="margin-top: 15px;">Ready for impact</div>
+            
+            <div class="impact-separator" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(100,100,100,0.3);"></div>
+            
+            <span class="section-title" style="text-align: center; margin-bottom: 10px;">🎰 EVENT - Let's Go Gambling</span>
+            
+            <div class="jackpot-lang-select" style="display: flex; justify-content: center; align-items: center; gap: 8px; margin-bottom: 15px;">
+                <span style="font-size: 10px; color: #888;">Language:</span>
+                <select class="config-select" id="jackpotLang" style="min-width: 100px;">
+                    <option value="en" selected>English</option>
+                    <option value="es">Spanish</option>
+                </select>
+            </div>
+            
+            <div class="jackpot-buttons" style="display: flex; flex-direction: column; gap: 10px;">
+                <button type="button" class="btn-main btn-jackpot-start" id="btnJackpotStart">🎰 JACKPOT PREVIEW</button>
+                <button type="button" class="btn-main btn-jackpot-end" id="btnJackpotEnd">🛑 JACKPOT OUT</button>
+            </div>
+
+            <div class="dwemer-doom-section" style="margin-top: 20px; padding-top: 15px; border-top: 1px solid rgba(100,100,100,0.3);">
+                <span class="section-title" style="text-align: center; margin-bottom: 10px;">Project Dwemer Doom</span>
+                <button type="button" class="btn-main btn-dwemer-doom" id="btnDwemerDoom">Project Doom Alpha</button>
+            </div>
+        </div>
+
+        
+        
+        
+        <div id="tab-config" class="hub-tab-content">
+            <div class="vol">
+                <span>🔊 Volume:</span>
+                <input type="range" id="vol" min="0" max="100" value="70">
+                <span id="vol-txt">70</span>
+            </div>
+
+            <div class="cfg">
+                <div class="row">
+                    <span>First (hold):</span>
+                    <select id="firstKey">
+                        <option value="0x2A">L.Shift</option>
+                        <option value="0x36">R.Shift</option>
+                        <option value="0x1D">L.Ctrl</option>
+                        <option value="0x38">L.Alt</option>
+                    </select>
+                </div>
+                <div class="row">
+                    <span>Second:</span>
+                    <select id="secondKey">
+                        <option value="0x1E">A</option><option value="0x30">B</option>
+                        <option value="0x2E">C</option><option value="0x20">D</option>
+                        <option value="0x12">E</option><option value="0x21">F</option>
+                        <option value="0x22">G</option><option value="0x23">H</option>
+                        <option value="0x17">I</option><option value="0x24">J</option>
+                        <option value="0x25">K</option><option value="0x26">L</option>
+                        <option value="0x32">M</option><option value="0x31">N</option>
+                        <option value="0x18">O</option><option value="0x19">P</option>
+                        <option value="0x10">Q</option><option value="0x13">R</option>
+                        <option value="0x1F">S</option><option value="0x14">T</option>
+                        <option value="0x16">U</option><option value="0x2F">V</option>
+                        <option value="0x11">W</option><option value="0x2D">X</option>
+                        <option value="0x15">Y</option><option value="0x2C">Z</option>
+                    </select>
+                </div>
+                <div class="row">
+                    <span>Single key:</span>
+                    <input type="checkbox" id="singleMode">
+                </div>
+                <div class="row">
+                    <span>Hub sound:</span>
+                    <select id="hubSound">
+                        <option value="miau-PDA.wav">Miau</option>
+                        <option value="swoosh-07.wav">Swoosh</option>
+                        <option value="metal-pipe.wav">Pipe</option>
+                    </select>
+                </div>
+                <div class="row">
+                    <span>Mute hub:</span>
+                    <input type="checkbox" id="muteHubSound">
+                </div>
+            </div>
+            
+            
+            <div class="menu-tracking-section" style="margin-top: 15px; text-align: center;">
+                <button type="button" class="btn-main" id="btnMenuTracking">Menu Tracking</button>
+                <div class="menu-tracking-info">
+                    Track menus to control Panel Live visibility.<br>
+                    Checked = Panel hides when menu is open.
+                </div>
+            </div>
+            
+            
+            <div class="items-config-section" style="margin-top: 10px; text-align: center;">
+                <button type="button" class="btn-main" id="btnItemsConfig">Items Config</button>
+                <div class="items-config-info" style="font-size: 10px; color: #888; margin-top: 3px;">
+                    Configure items and notifications.
+                </div>
+            </div>
+            
+            
+            <div class="row" style="margin-top: 10px;">
+                <span>Show boot animation:</span>
+                <input type="checkbox" id="cfgLiveAutoStart">
+            </div>
+            <div style="font-size: 10px; color: #666; margin-bottom: 8px; margin-top: 2px;">
+                Show loading cat animation when game starts.
+            </div>
+            <div class="row">
+                <span>Position preview:</span>
+                <button type="button" class="btn-panel" id="btnBootPreview" onclick="previewBootAnimation()">Preview & Position</button>
+            </div>
+        </div>
+
+    </div> 
+
+    
+    <div class="submenu menus-submenu" id="menusSubmenu">
+        <div class="submenu-head" id="dragMenusSubmenu">
+            <span class="submenu-title">Detected Menus</span>
+            <button type="button" class="btn-x" id="btnCloseMenusSubmenu" title="Close">X</button>
+        </div>
+        <div class="submenu-content" id="menusList">
+            
+        </div>
+    </div>
+
+    
+    <div class="submenu items-submenu" id="itemsSubmenu">
+        <div class="submenu-head" id="dragItemsSubmenu">
+            <span class="submenu-title">Items Config</span>
+            <button type="button" class="btn-x" id="btnCloseItemsSubmenu" title="Close">X</button>
+        </div>
+        <div class="submenu-content" id="itemsConfigContent">
+            
+            <div class="cfg">
+                <div class="row">
+                    <span>Notification:</span>
+                    <button type="button" class="btn-panel notification-cycle-btn" id="btnNotificationType" data-current="game">Game</button>
+                </div>
+                <div style="font-size: 10px; color: #666; margin-bottom: 8px; margin-top: 2px;">
+                    Game = plugin notification, Hub = HTML toast, Off = disabled.
+                </div>
+                
+                <div class="row">
+                    <span>Gold:</span>
+                    <button type="button" class="btn-panel" id="btnGoldEnabled">Enabled</button>
+                </div>
+                <div class="row">
+                    <span>Amount:</span>
+                    <input type="number" id="goldAmountInput" class="cfg-input" min="1" max="9999" value="9">
+                </div>
+                <div style="font-size: 10px; color: #666; margin-bottom: 8px; margin-top: 2px;">
+                    Gold amount given when pressing the button.
+                </div>
+                
+                <div class="row" style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(100,100,100,0.3);">
+                    <span>Test notification:</span>
+                    <button type="button" class="btn-panel" id="btnTestNotification">Test</button>
+                </div>
+                <div style="font-size: 10px; color: #666; margin-bottom: 8px; margin-top: 2px;">
+                    Preview the Hub notification toast.
+                </div>
+                
+                
+                <div class="row" style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(100,100,100,0.3);">
+                    <span>Toast Size:</span>
+                    <div class="size-control">
+                        <button type="button" class="ctrl-btn" id="toastSizeDown">−</button>
+                        <span id="toastSizeTxt">14px</span>
+                        <button type="button" class="ctrl-btn" id="toastSizeUp">+</button>
+                    </div>
+                </div>
+                <div style="font-size: 10px; color: #666; margin-bottom: 8px; margin-top: 2px;">
+                    Notification toast font size.
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    
+    <div class="notification-toast hidden" id="notificationToast">
+        <span class="notification-toast-message" id="notificationToastMessage">Received 9 Gold</span>
+    </div>
+
+    <!-- FLOATING PANELS -->
+    <div class="panel panel-gif" id="panelGif">
+        <button type="button" class="btn-x" id="btnCloseGif" title="Close">✕</button>
+        <div class="panel-head" id="dragGif">
+            <span class="panel-title">🐱 Cat GIF</span>
+        </div>
+        <div class="panel-content">
+            <img src="Assets/Images/013.gif" id="gifImage" class="gif-display" alt="Cat GIF">
+        </div>
+        <div class="panel-controls">
+            <button type="button" class="ctrl-btn" id="gifZoomOut">−</button>
+            <span id="gifZoomTxt">100%</span>
+            <button type="button" class="ctrl-btn" id="gifZoomIn">+</button>
+        </div>
+        <div class="resize-handle" id="resizeGif"></div>
+    </div>
+    
+
+    <div class="panel panel-video" id="panelVideo">
+        <button type="button" class="btn-x" id="btnCloseVideo" title="Close">✕</button>
+        <div class="panel-head" id="dragVideo">
+            <span class="panel-title">🎬 Video Player</span>
+        </div>
+        <div class="panel-content video-container">
+            <canvas id="videoCanvas" width="320" height="240"></canvas>
+        </div>
+        <div class="panel-controls">
+            <button type="button" class="ctrl-btn ctrl-play" id="videoPlay" title="Play">▶</button>
+            <button type="button" class="ctrl-btn ctrl-pause" id="videoPause" title="Pause">⏸</button>
+            <button type="button" class="ctrl-btn ctrl-stop" id="videoStop" title="Stop">⏹</button>
+            <button type="button" class="ctrl-btn ctrl-fullscreen" id="videoFullscreen" title="Fullscreen">⛶</button>
+        </div>
+        <div class="panel-controls">
+            <input type="range" id="videoSeek" class="video-seek" min="0" max="4897" value="0">
+            <span id="videoTime">0:00 / 3:24</span>
+        </div>
+        <div class="panel-controls video-extra-controls">
+            <label class="control-label">Opacity:</label>
+            <input type="range" id="videoOpacity" class="mini-slider" min="20" max="100" value="100">
+            <span id="videoOpacityTxt">100%</span>
+            <span class="control-divider">|</span>
+            <label class="control-label">🔊</label>
+            <input type="range" id="videoVolume" class="mini-slider" min="0" max="100" value="70">
+            <span id="videoVolumeTxt">70%</span>
+        </div>
+        <div class="resize-handle" id="resizeVideo"></div>
+    </div>
+    
+
+    <div class="panel panel-logs" id="panelLogs">
+        <div class="panel-head" id="dragLogs">
+            <div class="logs-tabs">
+                <button type="button" class="log-tab active" data-log="main">Main Log</button>
+                <button type="button" class="log-tab" data-log="menus">Menus Log</button>
+                <button type="button" class="log-tab" data-log="inspector">Inspector</button>
+            </div>
+            <button type="button" class="btn-x" id="btnCloseLogs" title="Close">✕</button>
+        </div>
+        <div class="panel-content logs-container">
+            <div id="logsContent" class="logs-content"></div>
+        </div>
+        <div class="panel-controls">
+            <button type="button" class="ctrl-btn" id="logsRefresh">🔄 Refresh</button>
+            <button type="button" class="ctrl-btn" id="logsClear">🗑 Clear</button>
+            <button type="button" class="ctrl-btn" id="logsCopy">📋 Copy</button>
+            <label class="auto-refresh-label">
+                <input type="checkbox" id="logsAutoRefresh" checked>
+                <span>Auto</span>
+            </label>
+        </div>
+        <div class="panel-controls">
+            <span style="font-size:10px;color:#888;">Font:</span>
+            <button type="button" class="ctrl-btn" id="logsFontDown">−</button>
+            <span id="logsFontSizeTxt">10px</span>
+            <button type="button" class="ctrl-btn" id="logsFontUp">+</button>
+        </div>
+
+        <div class="resize-handle" id="resizeLogs"></div>
+    </div>
+    
+
+    <div class="panel panel-live default-bg" id="panelLive">
+        <div class="live-content">
+            <div class="player-container">
+                <div class="player-cover">
+                    <div class="player-cover-placeholder" style="width:100%;height:100%;background:#000;display:flex;align-items:center;justify-content:center;">
+                        <span style="color:#333;font-size:20px;">♪</span>
+                    </div>
+                    <img id="playerCoverImg" src="" alt="Cover" style="display:none;" />
+                </div>
+                <div class="player-disc" style="position:relative;">
+                    <img id="playerDiscGif" src="Assets/Images/viaductk-music-7683.gif" alt="Disc" style="cursor:pointer;" />
+                    <canvas id="playerDiscGifFreeze" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; cursor:pointer;"></canvas>
+                    
+                    <div class="gif-overlay" id="gifOverlay">
+                        <div class="gif-play-icon" id="gifPlayIcon">▶</div>
+                    </div>
+                </div>
+                <div class="player-info">
+                    <div class="player-title" id="playerSongTitle">No track playing right now - select music to start</div>
+                    <div class="player-progress-container">
+                        <div class="player-progress-bar">
+                            <div class="player-progress-fill" id="playerProgressFill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="player-time">
+                        <span id="playerCurrentTime">00:00</span>
+                        <span>/</span>
+                        <span id="playerTotalTime">00:00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="resize-handle" id="resizeLive"></div>
+    </div>
+    
+
+    
+
+    
+    <div class="impact-overlay" id="impactOverlay">
+        <img class="impact-frame" id="impactFrame" src="" alt="Impact">
+        <div class="impact-dissolve" id="impactDissolve"></div>
+    </div>
+
+    <div class="dwemer-doom-overlay" id="dwemerDoomOverlay">
+        <div class="dwemer-doom-container">
+            <div class="dwemer-doom-header">
+                <span>DWEMER DOOM ALFA</span>
+                <button type="button" class="dwemer-doom-exit" id="btnDoomExit">EXIT</button>
+            </div>
+            <iframe id="dwemerDoomFrame" src="" frameborder="0"></iframe>
+        </div>
+    </div>
+
+    
+    <div id="bootAnimation" class="boot-animation hidden">
+        <div class="boot-cat-container">
+            <img src="Assets/Images/013.gif" alt="Loading Cat" class="boot-cat">
+            <div class="boot-progress-container">
+                <div class="boot-progress-bar" id="bootProgressBar"></div>
+            </div>
+            <div class="boot-text">Loading Assets miau...</div>
+        </div>
+    </div>
+
+    
+    <div id="configToast" class="config-toast hidden">
+        <div class="config-toast-title" id="configToastTitle">Control Info</div>
+        <div class="config-toast-message" id="configToastMessage">Information will appear here</div>
+    </div>
+
+    <div id="secret-toast" class="secret-toast">
+        <span id="secret-toast-message"></span>
+    </div>
+
+    <script src="Assets/Video/corto-v1/corto-v1_config.js"></script>
+    <script src="Assets/Video/jackpot/advance-Jackpot_names.js"></script>
+    <script src="Assets/Video/jackpot/advance-Jackpot_bin.js"></script>
+    <script src="Assets/Video/impact_frames/Boom_v1/Boom_v1_names.js"></script>
+    <script src="Assets/Video/impact_frames/Boom_v1/Boom_v1_bin.js"></script>
+    <script src="Assets/Video/impact_frames/Cut_blood/Cut_blood_names.js"></script>
+    <script src="Assets/Video/impact_frames/Cut_blood/Cut_blood_bin.js"></script>
+    <script src="Assets/Video/impact_frames/Cut_Parry/Cut_Parry_names.js"></script>
+    <script src="Assets/Video/impact_frames/Cut_Parry/Cut_Parry_bin.js"></script>
+    <script src="script.js"></script>
+    
+    <script src="Assets/js/daily-message.js"></script>
+    <script src="Assets/js/daily-updates-ball.js"></script>
+    <script src="Assets/js/key-tracker-ball.js"></script>
+    <script src="Assets/js/support-ball.js"></script>
+    <script src="Assets/js/social-links-ball.js"></script>
+    <script src="Assets/js/hub-toggle-panel.js"></script>
+</body>
+</html>
