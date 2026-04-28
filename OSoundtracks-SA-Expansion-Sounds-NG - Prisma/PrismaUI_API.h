@@ -1,0 +1,1 @@
+Here they put their H for Prisma, but due to legal terms they don't put it here. You can download it from https://www.nexusmods.com/skyrimspecialedition/mods/148718
